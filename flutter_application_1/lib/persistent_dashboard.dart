@@ -25,6 +25,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'auth_service.dart';
+import 'services/remote_auth_service.dart';
 import 'main.dart';
 import 'data/app_repository.dart';
 import 'utils/validators.dart';
@@ -40,6 +41,7 @@ class FamilyDashboard extends StatefulWidget {
 
 class _FamilyDashboardState extends State<FamilyDashboard> {
   final _repo = AppRepository.instance;
+  final _authService = RemoteAuthService();
 
   List<FamilyMember> _members = [];
   bool _loading = true;
@@ -54,7 +56,14 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   Future<void> _loadMembers() async {
     setState(() => _loading = true);
     try {
-      final records = await _repo.getAllMembers();
+      final familyId = await _authService.familyId;
+      
+      if (familyId == null) {
+        _showError('Family not found. Please sign in again.');
+        return;
+      }
+      
+      final records = await _repo.getMembersForFamily(familyId);
       if (!mounted) return;
       setState(() {
         _members = records.map(FamilyMember.fromRecord).toList();
@@ -198,8 +207,18 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
     }
 
     final age = int.parse(ageText.trim());
+    final familyId = await _authService.familyId;
+    
+    if (familyId == null) {
+      _showError('Family not found. Please sign in again.');
+      return;
+    }
+    
     final record = MemberRecord(
-      name: name, age: age, profileType: type.name,
+      familyId: familyId,
+      name: name, 
+      age: age, 
+      profileType: type.name,
     );
 
     try {

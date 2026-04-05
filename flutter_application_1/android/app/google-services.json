@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "436356278011",
+    "project_id": "elty-app",
+    "storage_bucket": "elty-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:436356278011:android:649316cb5f2fa69fc3f25e",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDiRfEsNYvbQRY1oTAkOdROpyDsnbBRjdM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

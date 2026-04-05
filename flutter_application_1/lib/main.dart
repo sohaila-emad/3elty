@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 
-import 'auth_service.dart';
+import 'services/remote_auth_service.dart';
+import 'screens/family_auth_screen.dart';
 import 'persistent_dashboard.dart';
 import 'modules/medications_screen.dart';
 import 'modules/vitals_screen.dart';
@@ -9,8 +12,6 @@ import 'modules/appointments_screen.dart';
 import 'modules/documents_screen.dart';
 import 'modules/vaccinations_screen.dart';
 import 'modules/growth_tracking_screen.dart';
-import 'utils/validators.dart';
-import 'utils/error_handler.dart';
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 class AppColors {
@@ -80,7 +81,7 @@ extension ProfileTypeX on ProfileType {
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 class FamilyMember {
-  final int? id;  // null until saved to DB
+  final String? id;  // null until saved to DB (Firebase document ID)
   final String name;
   final int age;
   final ProfileType profileType;
@@ -93,7 +94,7 @@ class FamilyMember {
 
   /// Convert DB record → UI model
   factory FamilyMember.fromRecord(dynamic r) => FamilyMember(
-    id:          r.id,
+    id:          r.id as String?,
     name:        r.name,
     age:         r.age,
     profileType: ProfileType.values.firstWhere(
@@ -328,7 +329,20 @@ List<HealthModule> modulesFor(ProfileType type) {
 }
 
 // ─── APP ─────────────────────────────────────────────────────────────────────
-void main() => runApp(const E3ltyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    print('Firebase initialization error: $e');
+  }
+
+  runApp(const E3ltyApp());
+}
 
 class E3ltyApp extends StatelessWidget {
   const E3ltyApp({super.key});
@@ -396,6 +410,9 @@ class E3ltyApp extends StatelessWidget {
         ),
       ),
       home: const _AuthWrapper(),
+      routes: {
+        '/persistent_dashboard': (context) => const FamilyDashboard(),
+      },
     );
   }
 }
@@ -409,11 +426,12 @@ class _AuthWrapper extends StatefulWidget {
 
 class _AuthWrapperState extends State<_AuthWrapper> {
   late Future<bool> _authCheckFuture;
+  final _authService = RemoteAuthService();
 
   @override
   void initState() {
     super.initState();
-    _authCheckFuture = AuthService.instance.isSignedIn();
+    _authCheckFuture = _authService.isSignedIn();
   }
 
   @override
@@ -429,349 +447,14 @@ class _AuthWrapperState extends State<_AuthWrapper> {
           );
         }
         final isSignedIn = snapshot.data ?? false;
-        return isSignedIn ? const FamilyDashboard() : const AdminSignUpScreen();
+        return isSignedIn ? const FamilyDashboard() : const FamilyAuthScreen();
       },
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCREEN 1 — SIGN UP
-// ═══════════════════════════════════════════════════════════════════════════════
-class AdminSignUpScreen extends StatefulWidget {
-  const AdminSignUpScreen({super.key});
-
-  @override
-  State<AdminSignUpScreen> createState() => _AdminSignUpScreenState();
-}
-
-class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _nameCtrl     = TextEditingController();
-  final _phoneCtrl    = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure  = true;
-  bool _loading  = false;
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-
-    final success = await AuthService.instance.signUp(
-      name: _nameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
-      password: _passwordCtrl.text,
-    );
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    if (success) {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const FamilyDashboard()),
-      );
-    } else {
-      if (!mounted) return;
-      ErrorHandler.showError(
-        context,
-        'Sign up failed. You already have an account with this phone number. Use Sign In instead.',
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Column(children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: AppColors.tealLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.health_and_safety_rounded, size: 40, color: AppColors.teal),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('3elty',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
-                        color: AppColors.teal, letterSpacing: -0.5)),
-                  const SizedBox(height: 4),
-                  const Text('Your Family Health Companion',
-                    style: TextStyle(fontSize: 14, color: AppColors.grey600)),
-                ]),
-              ),
-              const SizedBox(height: 40),
-              const Text('Create family account',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 6),
-              const Text("The admin manages all family members' health in one place.",
-                style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5)),
-              const SizedBox(height: 28),
-              Form(
-                key: _formKey,
-                child: Column(children: [
-                  TextFormField(
-                    controller: _nameCtrl,
-                    textCapitalization: TextCapitalization.words,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: const InputDecoration(
-                      labelText: 'Full name',
-                      hintText: 'e.g. Ahmed Hassan',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
-                    validator: Validators.validateAdminName,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(fontSize: 16),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Phone number',
-                      hintText: '01xxxxxxxxx',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      prefixText: '+20  ',
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Please enter your phone number';
-                      if (v.trim().length < 10) return 'Enter a valid Egyptian phone number';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    obscureText: _obscure,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                    validator: Validators.validatePassword,
-                  ),
-                  const SizedBox(height: 28),
-                  _loading
-                      ? const SizedBox(height: kMinTouch,
-                          child: Center(child: CircularProgressIndicator(color: AppColors.teal)))
-                      : ElevatedButton(
-                          onPressed: _submit,
-                          child: const Text('Create account & continue'),
-                        ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, kMinTouch)),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AdminSignInScreen()),
-                      );
-                    },
-                    child: const Text('Already have an account? Sign in',
-                        style: TextStyle(color: AppColors.teal)),
-                  ),
-                ]),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SCREEN 2 — SIGN IN
-// ═══════════════════════════════════════════════════════════════════════════════
-class AdminSignInScreen extends StatefulWidget {
-  const AdminSignInScreen({super.key});
-
-  @override
-  State<AdminSignInScreen> createState() => _AdminSignInScreenState();
-}
-
-class _AdminSignInScreenState extends State<AdminSignInScreen> {
-  final _formKey      = GlobalKey<FormState>();
-  final _phoneCtrl    = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  bool _obscure  = true;
-  bool _loading  = false;
-
-  @override
-  void dispose() {
-    _phoneCtrl.dispose();
-    _passwordCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-
-    final success = await AuthService.instance.signIn(
-      phone: _phoneCtrl.text.trim(),
-      password: _passwordCtrl.text,
-    );
-
-    if (!mounted) return;
-    setState(() => _loading = false);
-
-    if (success) {
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const FamilyDashboard()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.red,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          content: const Row(children: [
-            Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'Invalid phone or password.',
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ]),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.grey50,
-      appBar: AppBar(
-        title: const Text('Sign In'),
-        centerTitle: false,
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Column(children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: AppColors.tealLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.health_and_safety_rounded, size: 40, color: AppColors.teal),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text('Welcome back',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
-                        color: AppColors.teal, letterSpacing: -0.5)),
-                  const SizedBox(height: 4),
-                  const Text('Sign in to your family account',
-                    style: TextStyle(fontSize: 14, color: AppColors.grey600)),
-                ]),
-              ),
-              const SizedBox(height: 40),
-              Form(
-                key: _formKey,
-                child: Column(children: [
-                  TextFormField(
-                    controller: _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    style: const TextStyle(fontSize: 16),
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      labelText: 'Phone number',
-                      hintText: '01xxxxxxxxx',
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      prefixText: '+20  ',
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Please enter your phone number';
-                      if (v.trim().length < 10) return 'Enter a valid Egyptian phone number';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    obscureText: _obscure,
-                    style: const TextStyle(fontSize: 16),
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined),
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                      ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Please enter a password';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 28),
-                  _loading
-                      ? const SizedBox(height: kMinTouch,
-                          child: Center(child: CircularProgressIndicator(color: AppColors.teal)))
-                      : ElevatedButton(
-                          onPressed: _submit,
-                          child: const Text('Sign in'),
-                        ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, kMinTouch)),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Don't have an account? Create one",
-                        style: TextStyle(color: AppColors.teal)),
-                  ),
-                ]),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SCREEN 3 — MEMBER PROFILE HUB  ← NEW
+// SCREEN — MEMBER PROFILE HUB
 // ═══════════════════════════════════════════════════════════════════════════════
 class MemberProfileScreen extends StatelessWidget {
   final FamilyMember member;

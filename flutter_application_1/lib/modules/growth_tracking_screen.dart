@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../data/app_repository.dart';
+import '../services/remote_auth_service.dart';
 
 class GrowthTrackingScreen extends StatefulWidget {
   final FamilyMember member;
@@ -12,6 +13,7 @@ class GrowthTrackingScreen extends StatefulWidget {
 
 class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
   final _repo = AppRepository.instance;
+  final _authService = RemoteAuthService();
   List<dynamic> _vitals = [];
   bool _loading = true;
 
@@ -92,6 +94,12 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
               }
               
               try {
+                final familyId = await _authService.familyId;
+                if (familyId == null) {
+                  _showError('Family not found. Please sign in again.');
+                  return;
+                }
+                
                 // Save height if provided
                 if (heightStr.isNotEmpty) {
                   final height = double.tryParse(heightStr);
@@ -100,6 +108,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                     return;
                   }
                   await _repo.insertVital(VitalRecord(
+                    familyId: familyId,
                     memberId: widget.member.id!,
                     type: 'height',
                     value: height,
@@ -115,6 +124,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                     return;
                   }
                   await _repo.insertVital(VitalRecord(
+                    familyId: familyId,
                     memberId: widget.member.id!,
                     type: 'weight',
                     value: weight,

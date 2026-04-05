@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../data/app_repository.dart';
+import '../services/remote_auth_service.dart';
 
 class AppointmentsScreen extends StatefulWidget {
   final FamilyMember member;
@@ -13,6 +14,7 @@ class AppointmentsScreen extends StatefulWidget {
 
 class _AppointmentsScreenState extends State<AppointmentsScreen> {
   final _repo = AppRepository.instance;
+  final _authService = RemoteAuthService();
   List<dynamic> _appointments = [];
   bool _loading = true;
 
@@ -88,7 +90,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     return;
                   }
                   try {
+                    final familyId = await _authService.familyId;
+                    if (familyId == null) {
+                      _showError('Family not found. Please sign in again.');
+                      return;
+                    }
                     await _repo.insertAppointment(AppointmentRecord(
+                      familyId: familyId,
                       memberId: widget.member.id!,
                       title: titleCtrl.text.trim(),
                       doctor: doctorCtrl.text.isEmpty ? null : doctorCtrl.text.trim(),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../data/app_repository.dart';
+import '../services/remote_auth_service.dart';
 
 class VitalsScreen extends StatefulWidget {
   final FamilyMember member;
@@ -13,6 +14,7 @@ class VitalsScreen extends StatefulWidget {
 
 class _VitalsScreenState extends State<VitalsScreen> {
   final _repo = AppRepository.instance;
+  final _authService = RemoteAuthService();
   List<dynamic> _vitals = [];
   bool _loading = true;
 
@@ -95,7 +97,13 @@ class _VitalsScreenState extends State<VitalsScreen> {
                     return;
                   }
                   try {
+                    final familyId = await _authService.familyId;
+                    if (familyId == null) {
+                      _showError('Family not found. Please sign in again.');
+                      return;
+                    }
                     await _repo.insertVital(VitalRecord(
+                      familyId: familyId,
                       memberId: widget.member.id!,
                       type: selectedType,
                       value: double.parse(valueCtrl.text),
