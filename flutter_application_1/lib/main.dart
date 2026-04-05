@@ -1,121 +1,1262 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-void main() {
-  runApp(const MyApp());
+import 'auth_service.dart';
+import 'persistent_dashboard.dart';
+import 'modules/medications_screen.dart';
+import 'modules/vitals_screen.dart';
+import 'modules/appointments_screen.dart';
+import 'modules/documents_screen.dart';
+import 'modules/vaccinations_screen.dart';
+import 'modules/growth_tracking_screen.dart';
+import 'utils/validators.dart';
+import 'utils/error_handler.dart';
+
+// ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
+class AppColors {
+  static const teal      = Color(0xFF00796B);
+  static const tealLight = Color(0xFFE0F2F1);
+  static const red       = Color(0xFFD32F2F);
+  static const redLight  = Color(0xFFFFEBEE);
+  static const green     = Color(0xFF2E7D32);
+  static const greenLight= Color(0xFFE8F5E9);
+  static const orange    = Color(0xFFE65100);
+  static const orangeLight = Color(0xFFFFF3E0);
+  static const grey50    = Color(0xFFFAFAFA);
+  static const grey100   = Color(0xFFF5F5F5);
+  static const grey200   = Color(0xFFEEEEEE);
+  static const grey400   = Color(0xFFBDBDBD);
+  static const grey500   = Color(0xFF9E9E9E);
+  static const grey600   = Color(0xFF757575);
+  static const grey900   = Color(0xFF212121);
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+const double kMinTouch = 44.0;
 
-  // This widget is the root of your application.
+// ─── PROFILE TYPE ────────────────────────────────────────────────────────────
+enum ProfileType { child, elderly, pregnant, chronic, adult }
+
+extension ProfileTypeX on ProfileType {
+  String get label {
+    switch (this) {
+      case ProfileType.child:    return 'Child';
+      case ProfileType.elderly:  return 'Elderly';
+      case ProfileType.pregnant: return 'Pregnant';
+      case ProfileType.chronic:  return 'Chronic';
+      case ProfileType.adult:    return 'Adult';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case ProfileType.child:    return Icons.child_care_rounded;
+      case ProfileType.elderly:  return Icons.elderly_rounded;
+      case ProfileType.pregnant: return Icons.pregnant_woman_rounded;
+      case ProfileType.chronic:  return Icons.monitor_heart_outlined;
+      case ProfileType.adult:    return Icons.person_rounded;
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case ProfileType.child:    return const Color(0xFF1565C0);
+      case ProfileType.elderly:  return const Color(0xFF6A1B9A);
+      case ProfileType.pregnant: return const Color(0xFFAD1457);
+      case ProfileType.chronic:  return const Color(0xFFBF360C);
+      case ProfileType.adult:    return AppColors.teal;
+    }
+  }
+
+  Color get bgColor {
+    switch (this) {
+      case ProfileType.child:    return const Color(0xFFE3F2FD);
+      case ProfileType.elderly:  return const Color(0xFFF3E5F5);
+      case ProfileType.pregnant: return const Color(0xFFFCE4EC);
+      case ProfileType.chronic:  return const Color(0xFFFBE9E7);
+      case ProfileType.adult:    return AppColors.tealLight;
+    }
+  }
+}
+
+// ─── DATA MODELS ─────────────────────────────────────────────────────────────
+class FamilyMember {
+  final int? id;  // null until saved to DB
+  final String name;
+  final int age;
+  final ProfileType profileType;
+  const FamilyMember({
+    this.id,
+    required this.name,
+    required this.age,
+    required this.profileType,
+  });
+
+  /// Convert DB record → UI model
+  factory FamilyMember.fromRecord(dynamic r) => FamilyMember(
+    id:          r.id,
+    name:        r.name,
+    age:         r.age,
+    profileType: ProfileType.values.firstWhere(
+      (p) => p.name == r.profileType,
+      orElse: () => ProfileType.adult,
+    ),
+  );
+}
+
+// Health module definition
+class HealthModule {
+  final String id;
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final Color bgColor;
+  final String? badge; // e.g. "2 due", "Missed today"
+  final Color? badgeColor;
+
+  const HealthModule({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.bgColor,
+    this.badge,
+    this.badgeColor,
+  });
+}
+
+// ─── MODULE DEFINITIONS PER PROFILE TYPE ─────────────────────────────────────
+List<HealthModule> modulesFor(ProfileType type) {
+  switch (type) {
+    case ProfileType.child:
+      return const [
+        HealthModule(
+          id: 'vaccines',
+          title: 'Vaccination Schedule',
+          subtitle: "Egypt MOH calendar with digital booklet",
+          icon: Icons.vaccines_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+          badge: '2 due soon',
+          badgeColor: Color(0xFFE65100),
+        ),
+        HealthModule(
+          id: 'growth',
+          title: 'Growth Tracking',
+          subtitle: 'Weight & height vs WHO percentiles',
+          icon: Icons.show_chart_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+        ),
+        HealthModule(
+          id: 'appointments',
+          title: 'Appointments',
+          subtitle: 'Pediatric visits & reminders',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+        ),
+        HealthModule(
+          id: 'records',
+          title: 'Medical Records',
+          subtitle: 'Lab results, prescriptions & profile',
+          icon: Icons.folder_special_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+        ),
+      ];
+
+    case ProfileType.elderly:
+      return const [
+        HealthModule(
+          id: 'medications',
+          title: 'Medication Confirmation',
+          subtitle: 'One-tap daily dose tracking',
+          icon: Icons.medication_rounded,
+          color: Color(0xFF6A1B9A),
+          bgColor: Color(0xFFF3E5F5),
+          badge: 'Missed today',
+          badgeColor: AppColors.red,
+        ),
+        HealthModule(
+          id: 'vitals',
+          title: 'Vital Signs',
+          subtitle: 'Blood pressure, glucose & more',
+          icon: Icons.favorite_rounded,
+          color: Color(0xFF6A1B9A),
+          bgColor: Color(0xFFF3E5F5),
+        ),
+        HealthModule(
+          id: 'appointments',
+          title: 'Appointments',
+          subtitle: 'Doctor visits & follow-ups',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFF6A1B9A),
+          bgColor: Color(0xFFF3E5F5),
+        ),
+        HealthModule(
+          id: 'records',
+          title: 'Medical Records',
+          subtitle: 'Profile, conditions & documents',
+          icon: Icons.folder_special_rounded,
+          color: Color(0xFF6A1B9A),
+          bgColor: Color(0xFFF3E5F5),
+        ),
+      ];
+
+    case ProfileType.pregnant:
+      return const [
+        HealthModule(
+          id: 'prenatal_tests',
+          title: 'Prenatal Tests',
+          subtitle: 'Trimester checklist with reminders',
+          icon: Icons.science_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+          badge: 'Week 28 due',
+          badgeColor: Color(0xFFE65100),
+        ),
+        HealthModule(
+          id: 'medications',
+          title: 'Prenatal Medications',
+          subtitle: 'Folic acid, iron, calcium tracking',
+          icon: Icons.medication_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+        ),
+        HealthModule(
+          id: 'food_safety',
+          title: 'Food Safety Guide',
+          subtitle: 'Safe & unsafe local Egyptian dishes',
+          icon: Icons.restaurant_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+        ),
+        HealthModule(
+          id: 'appointments',
+          title: 'Appointments',
+          subtitle: 'OB/GYN visits & ultrasounds',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+        ),
+        HealthModule(
+          id: 'records',
+          title: 'Medical Records',
+          subtitle: 'Pregnancy docs & test results',
+          icon: Icons.folder_special_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+        ),
+      ];
+
+    case ProfileType.chronic:
+      return const [
+        HealthModule(
+          id: 'vitals',
+          title: 'Vital Signs Logger',
+          subtitle: 'Blood sugar, blood pressure & trends',
+          icon: Icons.monitor_heart_rounded,
+          color: Color(0xFFBF360C),
+          bgColor: Color(0xFFFBE9E7),
+          badge: 'Log today',
+          badgeColor: AppColors.orange,
+        ),
+        HealthModule(
+          id: 'medications',
+          title: 'Medication Adherence',
+          subtitle: 'Daily dose tracker & missed-dose alerts',
+          icon: Icons.medication_rounded,
+          color: Color(0xFFBF360C),
+          bgColor: Color(0xFFFBE9E7),
+        ),
+        HealthModule(
+          id: 'monthly_report',
+          title: 'Monthly Clinical Summary',
+          subtitle: 'Auto-generated PDF for doctor visits',
+          icon: Icons.summarize_rounded,
+          color: Color(0xFFBF360C),
+          bgColor: Color(0xFFFBE9E7),
+        ),
+        HealthModule(
+          id: 'appointments',
+          title: 'Appointments',
+          subtitle: 'Specialist follow-ups & lab tests',
+          icon: Icons.calendar_month_rounded,
+          color: Color(0xFFBF360C),
+          bgColor: Color(0xFFFBE9E7),
+        ),
+        HealthModule(
+          id: 'records',
+          title: 'Medical Records',
+          subtitle: 'Conditions, allergies & lab results',
+          icon: Icons.folder_special_rounded,
+          color: Color(0xFFBF360C),
+          bgColor: Color(0xFFFBE9E7),
+        ),
+      ];
+
+    case ProfileType.adult:
+      return const [
+        HealthModule(
+          id: 'appointments',
+          title: 'Appointments',
+          subtitle: 'Schedule & track doctor visits',
+          icon: Icons.calendar_month_rounded,
+          color: AppColors.teal,
+          bgColor: AppColors.tealLight,
+        ),
+        HealthModule(
+          id: 'medications',
+          title: 'Medications',
+          subtitle: 'Track prescriptions & doses',
+          icon: Icons.medication_rounded,
+          color: AppColors.teal,
+          bgColor: AppColors.tealLight,
+        ),
+        HealthModule(
+          id: 'records',
+          title: 'Medical Records',
+          subtitle: 'Profile, documents & history',
+          icon: Icons.folder_special_rounded,
+          color: AppColors.teal,
+          bgColor: AppColors.tealLight,
+        ),
+      ];
+  }
+}
+
+// ─── APP ─────────────────────────────────────────────────────────────────────
+void main() => runApp(const E3ltyApp());
+
+class E3ltyApp extends StatelessWidget {
+  const E3ltyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      title: '3elty',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
+        colorSchemeSeed: AppColors.teal,
+        scaffoldBackgroundColor: AppColors.grey50,
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.grey200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.grey200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.teal, width: 2),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.red),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.red, width: 2),
+          ),
+          labelStyle: const TextStyle(color: AppColors.grey600),
+          floatingLabelStyle: const TextStyle(
+            color: AppColors.teal,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.teal,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, kMinTouch + 6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+            textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: AppColors.grey900,
+          elevation: 0,
+          scrolledUnderElevation: 1,
+          titleTextStyle: TextStyle(
+            color: AppColors.grey900,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+          iconTheme: IconThemeData(color: AppColors.grey900),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const _AuthWrapper(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class _AuthWrapper extends StatefulWidget {
+  const _AuthWrapper();
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<_AuthWrapper> createState() => _AuthWrapperState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _AuthWrapperState extends State<_AuthWrapper> {
+  late Future<bool> _authCheckFuture;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _authCheckFuture = AuthService.instance.isSignedIn();
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    return FutureBuilder<bool>(
+      future: _authCheckFuture,
+      builder: (ctx, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: AppColors.teal),
             ),
-          ],
+          );
+        }
+        final isSignedIn = snapshot.data ?? false;
+        return isSignedIn ? const FamilyDashboard() : const AdminSignUpScreen();
+      },
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCREEN 1 — SIGN UP
+// ═══════════════════════════════════════════════════════════════════════════════
+class AdminSignUpScreen extends StatefulWidget {
+  const AdminSignUpScreen({super.key});
+
+  @override
+  State<AdminSignUpScreen> createState() => _AdminSignUpScreenState();
+}
+
+class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
+  final _formKey      = GlobalKey<FormState>();
+  final _nameCtrl     = TextEditingController();
+  final _phoneCtrl    = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _obscure  = true;
+  bool _loading  = false;
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+
+    final success = await AuthService.instance.signUp(
+      name: _nameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      password: _passwordCtrl.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (success) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const FamilyDashboard()),
+      );
+    } else {
+      if (!mounted) return;
+      ErrorHandler.showError(
+        context,
+        'Sign up failed. You already have an account with this phone number. Use Sign In instead.',
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.grey50,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Column(children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.tealLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.health_and_safety_rounded, size: 40, color: AppColors.teal),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('3elty',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                        color: AppColors.teal, letterSpacing: -0.5)),
+                  const SizedBox(height: 4),
+                  const Text('Your Family Health Companion',
+                    style: TextStyle(fontSize: 14, color: AppColors.grey600)),
+                ]),
+              ),
+              const SizedBox(height: 40),
+              const Text('Create family account',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 6),
+              const Text("The admin manages all family members' health in one place.",
+                style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5)),
+              const SizedBox(height: 28),
+              Form(
+                key: _formKey,
+                child: Column(children: [
+                  TextFormField(
+                    controller: _nameCtrl,
+                    textCapitalization: TextCapitalization.words,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: const InputDecoration(
+                      labelText: 'Full name',
+                      hintText: 'e.g. Ahmed Hassan',
+                      prefixIcon: Icon(Icons.person_outline_rounded),
+                    ),
+                    validator: Validators.validateAdminName,
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(fontSize: 16),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      hintText: '01xxxxxxxxx',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixText: '+20  ',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Please enter your phone number';
+                      if (v.trim().length < 10) return 'Enter a valid Egyptian phone number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordCtrl,
+                    obscureText: _obscure,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    validator: Validators.validatePassword,
+                  ),
+                  const SizedBox(height: 28),
+                  _loading
+                      ? const SizedBox(height: kMinTouch,
+                          child: Center(child: CircularProgressIndicator(color: AppColors.teal)))
+                      : ElevatedButton(
+                          onPressed: _submit,
+                          child: const Text('Create account & continue'),
+                        ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    style: TextButton.styleFrom(minimumSize: const Size(0, kMinTouch)),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AdminSignInScreen()),
+                      );
+                    },
+                    child: const Text('Already have an account? Sign in',
+                        style: TextStyle(color: AppColors.teal)),
+                  ),
+                ]),
+              ),
+            ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCREEN 2 — SIGN IN
+// ═══════════════════════════════════════════════════════════════════════════════
+class AdminSignInScreen extends StatefulWidget {
+  const AdminSignInScreen({super.key});
+
+  @override
+  State<AdminSignInScreen> createState() => _AdminSignInScreenState();
+}
+
+class _AdminSignInScreenState extends State<AdminSignInScreen> {
+  final _formKey      = GlobalKey<FormState>();
+  final _phoneCtrl    = TextEditingController();
+  final _passwordCtrl = TextEditingController();
+  bool _obscure  = true;
+  bool _loading  = false;
+
+  @override
+  void dispose() {
+    _phoneCtrl.dispose();
+    _passwordCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    FocusScope.of(context).unfocus();
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+
+    final success = await AuthService.instance.signIn(
+      phone: _phoneCtrl.text.trim(),
+      password: _passwordCtrl.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _loading = false);
+
+    if (success) {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const FamilyDashboard()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppColors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          content: const Row(children: [
+            Icon(Icons.error_outline_rounded, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Invalid phone or password.',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ]),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.grey50,
+      appBar: AppBar(
+        title: const Text('Sign In'),
+        centerTitle: false,
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Column(children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.tealLight,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(Icons.health_and_safety_rounded, size: 40, color: AppColors.teal),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Welcome back',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                        color: AppColors.teal, letterSpacing: -0.5)),
+                  const SizedBox(height: 4),
+                  const Text('Sign in to your family account',
+                    style: TextStyle(fontSize: 14, color: AppColors.grey600)),
+                ]),
+              ),
+              const SizedBox(height: 40),
+              Form(
+                key: _formKey,
+                child: Column(children: [
+                  TextFormField(
+                    controller: _phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    style: const TextStyle(fontSize: 16),
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      hintText: '01xxxxxxxxx',
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      prefixText: '+20  ',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return 'Please enter your phone number';
+                      if (v.trim().length < 10) return 'Enter a valid Egyptian phone number';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _passwordCtrl,
+                    obscureText: _obscure,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock_outline_rounded),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscure
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () => setState(() => _obscure = !_obscure),
+                      ),
+                    ),
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Please enter a password';
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 28),
+                  _loading
+                      ? const SizedBox(height: kMinTouch,
+                          child: Center(child: CircularProgressIndicator(color: AppColors.teal)))
+                      : ElevatedButton(
+                          onPressed: _submit,
+                          child: const Text('Sign in'),
+                        ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    style: TextButton.styleFrom(minimumSize: const Size(0, kMinTouch)),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Don't have an account? Create one",
+                        style: TextStyle(color: AppColors.teal)),
+                  ),
+                ]),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCREEN 3 — MEMBER PROFILE HUB  ← NEW
+// ═══════════════════════════════════════════════════════════════════════════════
+class MemberProfileScreen extends StatelessWidget {
+  final FamilyMember member;
+  const MemberProfileScreen({super.key, required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final t       = member.profileType;
+    final modules = modulesFor(t);
+
+    return Scaffold(
+      backgroundColor: AppColors.grey50,
+      body: CustomScrollView(
+        slivers: [
+          // ── Collapsible hero header ────────────────────────────────────────
+          SliverAppBar(
+            expandedHeight: 200,
+            pinned: true,
+            backgroundColor: Colors.white,
+            foregroundColor: AppColors.grey900,
+            elevation: 0,
+            scrolledUnderElevation: 1,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_rounded),
+              onPressed: () => Navigator.pop(context),
+            ),
+            actions: [
+              // Edit member button (placeholder)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () {},
+                tooltip: 'Edit profile',
+              ),
+            ],
+            flexibleSpace: FlexibleSpaceBar(
+              collapseMode: CollapseMode.pin,
+              background: _ProfileHeroHeader(member: member),
+            ),
+          ),
+
+          // ── Panic button for elderly (always on top) ───────────────────────
+          if (t == ProfileType.elderly)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _PanicButton(memberName: member.name),
+              ),
+            ),
+
+          // ── Quick stats strip ─────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: _QuickStatsRow(member: member),
+            ),
+          ),
+
+          // ── Section header ─────────────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+              child: Text(
+                '${t.label} Health Modules',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.grey900,
+                ),
+              ),
+            ),
+          ),
+
+          // ── Module grid ───────────────────────────────────────────────────
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            sliver: SliverGrid(
+              delegate: SliverChildBuilderDelegate(
+                (ctx, i) => _ModuleCard(
+                  module: modules[i],
+                  onTap: () => _onModuleTap(context, modules[i]),
+                ),
+                childCount: modules.length,
+              ),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 1.05,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onModuleTap(BuildContext context, HealthModule module) {
+    Widget screen;
+    
+    switch (module.id) {
+      case 'medications':
+        screen = MedicationsScreen(member: member);
+        break;
+      case 'vitals':
+        screen = VitalsScreen(member: member);
+        break;
+      case 'appointments':
+        screen = AppointmentsScreen(member: member);
+        break;
+      case 'records':
+        screen = DocumentsScreen(member: member);
+        break;
+      case 'vaccines':
+        screen = VaccinationsScreen(member: member);
+        break;
+      case 'growth':
+        screen = GrowthTrackingScreen(member: member);
+        break;
+      case 'prenatal_tests':
+      case 'food_safety':
+      case 'monthly_report':
+      default:
+        // Coming soon modules — show placeholder
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: module.color,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 2),
+            content: Row(children: [
+              Icon(module.icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              const Text('Coming soon…', style: TextStyle(color: Colors.white)),
+            ]),
+          ),
+        );
+        return;
+    }
+    
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+  }
+}
+
+// ─── Profile hero header widget ───────────────────────────────────────────────
+class _ProfileHeroHeader extends StatelessWidget {
+  final FamilyMember member;
+  const _ProfileHeroHeader({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = member.profileType;
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Avatar
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: t.bgColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: t.color.withOpacity(0.25), width: 2),
+            ),
+            child: Icon(t.icon, color: t.color, size: 36),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(member.name,
+                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
+                        color: AppColors.grey900)),
+                const SizedBox(height: 6),
+                Row(children: [
+                  _ProfileChip(label: t.label, color: t.color, bgColor: t.bgColor),
+                  const SizedBox(width: 8),
+                  _ProfileChip(
+                    label: '${member.age} yrs',
+                    color: AppColors.grey600,
+                    bgColor: AppColors.grey100,
+                  ),
+                ]),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileChip extends StatelessWidget {
+  final String label;
+  final Color color;
+  final Color bgColor;
+  const _ProfileChip({required this.label, required this.color, required this.bgColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(label,
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
+}
+
+// ─── Quick stats row (profile-type-aware) ─────────────────────────────────────
+class _QuickStatsRow extends StatelessWidget {
+  final FamilyMember member;
+  const _QuickStatsRow({required this.member});
+
+  @override
+  Widget build(BuildContext context) {
+    final stats = _statsFor(member.profileType);
+    return Row(
+      children: stats.map((s) => Expanded(
+        child: Padding(
+          padding: EdgeInsets.only(right: s != stats.last ? 10 : 0),
+          child: _StatTile(stat: s),
+        ),
+      )).toList(),
+    );
+  }
+
+  List<_StatData> _statsFor(ProfileType t) {
+    switch (t) {
+      case ProfileType.child:
+        return [
+          _StatData('Vaccines', '8/12', Icons.vaccines_rounded, AppColors.teal),
+          _StatData('Next visit', '3 days', Icons.calendar_today_rounded, AppColors.orange),
+        ];
+      case ProfileType.elderly:
+        return [
+          _StatData('Medications', '0/3 today', Icons.medication_rounded, AppColors.red),
+          _StatData('Last check', '2 hrs ago', Icons.access_time_rounded, AppColors.teal),
+        ];
+      case ProfileType.pregnant:
+        return [
+          _StatData('Trimester', '2nd', Icons.pregnant_woman_rounded,
+              const Color(0xFFAD1457)),
+          _StatData('Next test', 'Week 28', Icons.science_rounded, AppColors.orange),
+        ];
+      case ProfileType.chronic:
+        return [
+          _StatData('Vitals', 'Not logged', Icons.monitor_heart_rounded, AppColors.orange),
+          _StatData('Adherence', '87%', Icons.medication_rounded, AppColors.green),
+        ];
+      case ProfileType.adult:
+        return [
+          _StatData('Next visit', 'None set', Icons.calendar_today_rounded, AppColors.teal),
+          _StatData('Records', '2 docs', Icons.folder_rounded, AppColors.teal),
+        ];
+    }
+  }
+}
+
+class _StatData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _StatData(this.label, this.value, this.icon, this.color);
+}
+
+class _StatTile extends StatelessWidget {
+  final _StatData stat;
+  const _StatTile({required this.stat});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(stat.icon, size: 20, color: stat.color),
+          const SizedBox(height: 8),
+          Text(stat.value,
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: stat.color)),
+          const SizedBox(height: 2),
+          Text(stat.label,
+              style: const TextStyle(fontSize: 12, color: AppColors.grey600)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Panic button (elderly only) ──────────────────────────────────────────────
+class _PanicButton extends StatelessWidget {
+  final String memberName;
+  const _PanicButton({required this.memberName});
+
+  void _confirm(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: const BoxDecoration(color: AppColors.redLight, shape: BoxShape.circle),
+          child: const Icon(Icons.sos_rounded, color: AppColors.red, size: 32),
+        ),
+        title: const Text('Send emergency alert?',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+        content: Text(
+          "This will broadcast $memberName's GPS location to ALL family members.\n\nOnly use in a real emergency.",
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 15, color: AppColors.grey600, height: 1.5),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          Column(children: [
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, kMinTouch),
+                  side: const BorderSide(color: AppColors.grey200),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Cancel', style: TextStyle(color: AppColors.grey900)),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.red,
+                  minimumSize: const Size(double.infinity, kMinTouch),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  HapticFeedback.heavyImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    backgroundColor: AppColors.red,
+                    duration: const Duration(seconds: 5),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    content: const Row(children: [
+                      Icon(Icons.check_circle_rounded, color: Colors.white),
+                      SizedBox(width: 12),
+                      Expanded(child: Text('Emergency alert sent to all family members',
+                          style: TextStyle(color: Colors.white))),
+                    ]),
+                  ));
+                },
+                child: const Text('Yes, send SOS',
+                    style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.redLight,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () => _confirm(context),
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Row(children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: const BoxDecoration(
+                color: AppColors.red,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.sos_rounded, color: Colors.white, size: 22),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Emergency Panic Button',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
+                        color: AppColors.red)),
+                SizedBox(height: 2),
+                Text('Broadcasts GPS to all family members',
+                    style: TextStyle(fontSize: 13, color: AppColors.grey600)),
+              ]),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.red),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Module card ──────────────────────────────────────────────────────────────
+class _ModuleCard extends StatelessWidget {
+  final HealthModule module;
+  final VoidCallback onTap;
+  const _ModuleCard({required this.module, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Icon + optional badge row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: module.bgColor,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(module.icon, color: module.color, size: 22),
+                  ),
+                  if (module.badge != null) ...[
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topRight,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: (module.badgeColor ?? module.color).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            module.badge!,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              color: module.badgeColor ?? module.color,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const Spacer(),
+              Text(module.title,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                      color: AppColors.grey900),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              Text(module.subtitle,
+                  style: const TextStyle(fontSize: 11, color: AppColors.grey600, height: 1.4),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ),
+        ),
       ),
     );
   }
