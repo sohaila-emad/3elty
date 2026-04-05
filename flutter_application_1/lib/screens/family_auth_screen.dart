@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/services/remote_auth_service.dart';
 import 'package:flutter_application_1/services/firestore_service.dart';
+import '../main.dart';
 
 /// Screen for family signup/signin.
 /// First step of app authentication flow.
@@ -13,7 +14,8 @@ class FamilyAuthScreen extends StatefulWidget {
 
 class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   final _familyUsernameController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _familyPasswordController = TextEditingController();
+  final _adminPasswordController = TextEditingController();
   final _displayNameController = TextEditingController();
 
   final _authService = RemoteAuthService();
@@ -28,7 +30,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   @override
   void dispose() {
     _familyUsernameController.dispose();
-    _passwordController.dispose();
+    _familyPasswordController.dispose();
+    _adminPasswordController.dispose();
     _displayNameController.dispose();
     super.dispose();
   }
@@ -64,9 +67,10 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   Future<void> _handleSignUp() async {
     final username = _familyUsernameController.text.trim();
     final displayName = _displayNameController.text.trim();
-    final password = _passwordController.text;
+    final familyPassword = _familyPasswordController.text;
+    final adminPassword = _adminPasswordController.text;
 
-    if (username.isEmpty || password.isEmpty || displayName.isEmpty) {
+    if (username.isEmpty || familyPassword.isEmpty || adminPassword.isEmpty || displayName.isEmpty) {
       setState(() => _errorMessage = 'Please fill all fields');
       return;
     }
@@ -80,7 +84,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
       await _authService.signUpFamily(
         familyUsername: username,
         displayName: displayName,
-        adminPassword: password,
+        familyPassword: familyPassword,
+        adminPassword: adminPassword,
       );
 
       // Sync empty family data (no members yet)
@@ -101,7 +106,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   /// Handle signin for existing family.
   Future<void> _handleSignIn() async {
     final username = _familyUsernameController.text.trim();
-    final password = _passwordController.text;
+    final password = _familyPasswordController.text;
 
     if (username.isEmpty || password.isEmpty) {
       setState(() => _errorMessage = 'Please fill all fields');
@@ -116,8 +121,21 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
     try {
       await _authService.signInFamily(
         familyUsername: username,
-        adminPassword: password,
+        familyPassword: password,
       );
+
+      // Check if user is admin
+      final userRole = await _authService.userRole;
+      
+      // Only show admin verification if user is admin
+      if (userRole == 'admin' && mounted) {
+        final isAdminVerified = await _showAdminVerificationDialog();
+        
+        if (!isAdminVerified) {
+          // Admin didn't verify password - downgrade to member mode
+          await _authService.downgradeToMemberMode();
+        }
+      }
 
       // Sync family data from Firestore
       await _firestoreService.syncFamilyData();
@@ -132,6 +150,107 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  /// Show admin password verification dialog.
+  /// Returns true if password verified, false if skipped/cancelled.
+  Future<bool> _showAdminVerificationDialog() async {
+    final adminPasswordCtrl = TextEditingController();
+    bool obscurePassword = true;
+    bool? result;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Admin Verification',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'You are the admin. Enter your admin password to verify you are the admin and enable admin features.',
+                style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5),
+              ),
+              const SizedBox(height: 20),
+              TextFormField(
+                controller: adminPasswordCtrl,
+                obscureText: obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Admin Verification Password',
+                  prefixIcon: const Icon(Icons.lock_outline_rounded),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscurePassword
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined),
+                    onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.teal, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'If you skip this, you will use member access only.',
+                style: TextStyle(fontSize: 12, color: AppColors.grey500, fontStyle: FontStyle.italic),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                result = false; // Skip admin verification
+                Navigator.pop(ctx);
+              },
+              child: const Text('Skip (Member Mode)'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final adminPassword = adminPasswordCtrl.text;
+                if (adminPassword.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter admin password')),
+                  );
+                  return;
+                }
+
+                try {
+                  // Verify admin password
+                  await _authService.verifyAdminPassword(adminPassword);
+                  result = true; // Admin verified
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Invalid password: $e'),
+                      backgroundColor: AppColors.red,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Verify'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return result ?? false;
   }
 
   @override
@@ -227,18 +346,35 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 ),
               ),
 
-            // Password Field
+            // Family Password Field
             if (_showPasswordField)
               TextField(
-                controller: _passwordController,
+                controller: _familyPasswordController,
                 enabled: !_isLoading,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: 'Admin Password',
+                  labelText: _isSignUp ? 'Set Family Password' : 'Enter Family Password',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                   prefixIcon: const Icon(Icons.lock),
+                ),
+              ),
+            const SizedBox(height: 16),
+
+            // Admin Password Field (Sign Up only)
+            if (_showPasswordField && _isSignUp)
+              TextField(
+                controller: _adminPasswordController,
+                enabled: !_isLoading,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'Set Admin Password',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  prefixIcon: const Icon(Icons.admin_panel_settings),
+                  helperText: 'Only you (the admin) will know this password',
                 ),
               ),
             const SizedBox(height: 24),
@@ -291,7 +427,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                         setState(() {
                           _isSignUp = !_isSignUp;
                           _errorMessage = null;
-                          _passwordController.clear();
+                          _familyPasswordController.clear();
+                          _adminPasswordController.clear();
                           _displayNameController.clear();
                         });
                       },

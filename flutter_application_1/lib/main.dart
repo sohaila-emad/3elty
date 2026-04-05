@@ -5,7 +5,9 @@ import 'firebase_options.dart';
 
 import 'services/remote_auth_service.dart';
 import 'screens/family_auth_screen.dart';
+import 'screens/admin_member_management_screen.dart';
 import 'persistent_dashboard.dart';
+import 'widgets/protected_route.dart';
 import 'modules/medications_screen.dart';
 import 'modules/vitals_screen.dart';
 import 'modules/appointments_screen.dart';
@@ -412,6 +414,10 @@ class E3ltyApp extends StatelessWidget {
       home: const _AuthWrapper(),
       routes: {
         '/persistent_dashboard': (context) => const FamilyDashboard(),
+        '/admin_member_management': (context) => ProtectedRoute(
+          requiredRole: 'admin',
+          child: const AdminMemberManagementScreen(),
+        ),
       },
     );
   }

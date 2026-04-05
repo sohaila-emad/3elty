@@ -40,6 +40,7 @@ class RemoteAuthService {
   Future<String> signUpFamily({
     required String familyUsername,
     required String displayName,
+    required String familyPassword,
     required String adminPassword,
   }) async {
     try {
@@ -50,8 +51,11 @@ class RemoteAuthService {
       if (displayName.trim().isEmpty) {
         throw Exception('Family name cannot be empty');
       }
+      if (familyPassword.isEmpty || familyPassword.length < 6) {
+        throw Exception('Family password must be at least 6 characters');
+      }
       if (adminPassword.isEmpty || adminPassword.length < 6) {
-        throw Exception('Password must be at least 6 characters');
+        throw Exception('Admin password must be at least 6 characters');
       }
 
       // Check if family_username already exists
@@ -65,18 +69,19 @@ class RemoteAuthService {
         throw Exception('Family username already exists');
       }
 
-      // Create family document
+      // Create family document with family password
       final familyDocRef = _firestore.collection('families').doc();
       final familyId = familyDocRef.id;
 
       await familyDocRef.set({
         'family_username': familyUsername.trim(),
         'display_name': displayName.trim(),
+        'password_hash': _hashPassword(familyPassword),
         'created_at': FieldValue.serverTimestamp(),
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // Create admin user document
+      // Create admin user document with admin password
       final userDocRef = _firestore.collection('users').doc();
       final userId = userDocRef.id;
 
@@ -100,11 +105,11 @@ class RemoteAuthService {
     }
   }
 
-  /// Sign in an existing family with admin credentials.
+  /// Sign in an existing family with family credentials.
   /// Returns family_id if successful, throws exception if fails.
   Future<String> signInFamily({
     required String familyUsername,
-    required String adminPassword,
+    required String familyPassword,
   }) async {
     try {
       // Find family by family_username
@@ -118,9 +123,23 @@ class RemoteAuthService {
         throw Exception('Family not found');
       }
 
-      final familyId = familySnapshot.docs.first.id;
+      final familyDoc = familySnapshot.docs.first;
+      final familyId = familyDoc.id;
+      
+      // Safely get family password hash with type checking
+      final data = familyDoc.data();
+      final storedFamilyPasswordHash = data['password_hash'];
+      if (storedFamilyPasswordHash == null || storedFamilyPasswordHash is! String) {
+        throw Exception('Invalid family password configuration. Please contact support.');
+      }
 
-      // Find admin user for this family
+      // Verify family password
+      final inputHash = _hashPassword(familyPassword);
+      if (storedFamilyPasswordHash.toString() != inputHash) {
+        throw Exception('Incorrect family password');
+      }
+
+      // Find admin user for this family (to get user role)
       final userSnapshot = await _firestore
           .collection('users')
           .where('family_id', isEqualTo: familyId)
@@ -134,16 +153,11 @@ class RemoteAuthService {
 
       final userDoc = userSnapshot.docs.first;
       final userId = userDoc.id;
-      final storedPasswordHash = userDoc['password_hash'] as String;
+      final userRole = userDoc['role'] as String;
 
-      // Verify password
-      if (storedPasswordHash != _hashPassword(adminPassword)) {
-        throw Exception('Invalid password');
-      }
-
-      // Generate and store tokens
-      final token = _generateToken(userId, familyId, 'admin');
-      await _storeTokens(token, familyId, userId, 'admin');
+      // Generate and store tokens (initially as admin, may downgrade later)
+      final token = _generateToken(userId, familyId, userRole);
+      await _storeTokens(token, familyId, userId, userRole);
 
       return familyId;
     } catch (e) {
@@ -275,6 +289,71 @@ class RemoteAuthService {
       };
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Verify admin password for current family (for admin access verification).
+  /// Throws exception if password is invalid.
+  Future<void> verifyAdminPassword(String adminPassword) async {
+    try {
+      final familyId = await this.familyId;
+      if (familyId == null) {
+        throw Exception('No active family session');
+      }
+
+      // Find the admin user for this family
+      final adminSnapshot = await _firestore
+          .collection('users')
+          .where('family_id', isEqualTo: familyId)
+          .where('role', isEqualTo: 'admin')
+          .limit(1)
+          .get();
+
+      if (adminSnapshot.docs.isEmpty) {
+        throw Exception('Admin user not found');
+      }
+
+      final adminDoc = adminSnapshot.docs.first;
+      final data = adminDoc.data();
+      
+      // Safely get password_hash, handling type conversion
+      final storedPasswordHash = data['password_hash'];
+      if (storedPasswordHash == null || storedPasswordHash is! String) {
+        throw Exception('Admin password not configured. Please contact support.');
+      }
+
+      // Verify password
+      final inputHash = _hashPassword(adminPassword);
+      if (storedPasswordHash.toString() != inputHash) {
+        throw Exception('Incorrect admin password');
+      }
+
+      // Admin password verified successfully - no need to update tokens
+      // they were already set during initial signin
+    } catch (e) {
+      throw Exception('Admin verification failed: $e');
+    }
+  }
+
+  /// Downgrade admin user to member mode (if they don't verify admin password).
+  /// Changes user role from 'admin' to 'member' and updates token.
+  Future<void> downgradeToMemberMode() async {
+    try {
+      final userIdValue = await userId;
+      final familyIdValue = await familyId;
+
+      if (userIdValue == null || familyIdValue == null) {
+        throw Exception('No active session to downgrade');
+      }
+
+      // Update stored role to 'member'
+      await _secureStorage.write(key: _keyUserRole, value: 'member');
+
+      // Generate new token with 'member' role
+      final newToken = _generateToken(userIdValue, familyIdValue, 'member');
+      await _secureStorage.write(key: _keyAuthToken, value: newToken);
+    } catch (e) {
+      throw Exception('Downgrade failed: $e');
     }
   }
 

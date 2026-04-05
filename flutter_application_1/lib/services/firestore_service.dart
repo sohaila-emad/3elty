@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/data/app_repository.dart';
 import 'package:flutter_application_1/services/remote_auth_service.dart';
+import 'package:flutter_application_1/services/permission_service.dart';
 
 /// Firestore service for syncing family data from Firebase to local SQLite.
 /// Implements "pull on login" strategy.
@@ -13,7 +14,8 @@ class FirestoreService {
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final AppRepository _repository = AppRepository();
-  final RemoteAuthService _authService = RemoteAuthService();
+  final RemoteAuthService _authService = RemoteAuthService.instance;
+  final PermissionService _permissionService = PermissionService.instance;
 
   /// Sync all family data from Firestore to local SQLite.
   /// Called after successful login to populate local database.
@@ -165,14 +167,15 @@ class FirestoreService {
     required String profileType,
   }) async {
     try {
+      // Check if user has permission to add members
+      final canAdd = await _permissionService.canAddMember();
+      if (!canAdd) {
+        throw Exception('Only admins can add family members');
+      }
+
       final familyId = await _authService.familyId;
       if (familyId == null) {
         throw Exception('No active family session');
-      }
-
-      final userRole = await _authService.userRole;
-      if (userRole != 'admin') {
-        throw Exception('Only admins can add family members');
       }
 
       // Add to Firestore
@@ -275,8 +278,9 @@ class FirestoreService {
     required String profileType,
   }) async {
     try {
-      final userRole = await _authService.userRole;
-      if (userRole != 'admin') {
+      // Check if user has permission to edit members
+      final canEdit = await _permissionService.canEditMember();
+      if (!canEdit) {
         throw Exception('Only admins can update members');
       }
 
@@ -302,8 +306,9 @@ class FirestoreService {
   /// Delete a family member (admin only).
   Future<void> deleteFamilyMember(String memberId) async {
     try {
-      final userRole = await _authService.userRole;
-      if (userRole != 'admin') {
+      // Check if user has permission to delete members
+      final canDelete = await _permissionService.canDeleteMember();
+      if (!canDelete) {
         throw Exception('Only admins can delete members');
       }
 

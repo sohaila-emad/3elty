@@ -77,163 +77,6 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   }
 
   // ── Add member — writes to SQLite ───────────────────────────────────────────
-  void _showAddMemberDialog() {
-    final nameCtrl = TextEditingController();
-    final ageCtrl  = TextEditingController();
-    ProfileType selectedType = ProfileType.adult;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => Padding(
-          padding: EdgeInsets.fromLTRB(
-            24, 20, 24,
-            MediaQuery.of(ctx).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.grey200,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              const Text('Add family member',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 20),
-
-              TextField(
-                controller: nameCtrl,
-                textCapitalization: TextCapitalization.words,
-                style: const TextStyle(fontSize: 16),
-                decoration: _sheetDecoration('Member name', null),
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: ageCtrl,
-                keyboardType: TextInputType.number,
-                style: const TextStyle(fontSize: 16),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: _sheetDecoration('Age', '1 – 120'),
-              ),
-              const SizedBox(height: 16),
-
-              const Text('Profile type',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
-                    color: AppColors.grey600)),
-              const SizedBox(height: 10),
-
-              Wrap(
-                spacing: 8, runSpacing: 8,
-                children: ProfileType.values.map((type) {
-                  final sel = selectedType == type;
-                  return GestureDetector(
-                    onTap: () => setSheet(() => selectedType = type),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: sel ? type.bgColor : AppColors.grey100,
-                        border: Border.all(
-                          color: sel ? type.color : Colors.transparent,
-                          width: 2,
-                        ),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(type.icon, size: 16,
-                            color: sel ? type.color : AppColors.grey600),
-                        const SizedBox(width: 5),
-                        Text(type.label, style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: sel ? FontWeight.w600 : FontWeight.normal,
-                          color: sel ? type.color : AppColors.grey600,
-                        )),
-                      ]),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
-
-              SizedBox(
-                width: double.infinity,
-                height: kMinTouch + 6,
-                child: ElevatedButton(
-                  onPressed: () => _addMember(
-                    ctx,
-                    nameCtrl.text.trim(),
-                    ageCtrl.text.trim(),
-                    selectedType,
-                  ),
-                  child: const Text('Add member'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addMember(
-    BuildContext sheetCtx,
-    String name,
-    String ageText,
-    ProfileType type,
-  ) async {
-    // Validate inputs
-    final nameError = Validators.validateMemberName(name);
-    final ageError = Validators.validateAge(ageText);
-    
-    if (nameError != null) {
-      _showError(nameError);
-      return;
-    }
-    if (ageError != null) {
-      _showError(ageError);
-      return;
-    }
-
-    final age = int.parse(ageText.trim());
-    final familyId = await _authService.familyId;
-    
-    if (familyId == null) {
-      _showError('Family not found. Please sign in again.');
-      return;
-    }
-    
-    final record = MemberRecord(
-      familyId: familyId,
-      name: name, 
-      age: age, 
-      profileType: type.name,
-    );
-
-    try {
-      final newId = await _repo.insertMember(record);
-      final member = FamilyMember(id: newId, name: name, age: age, profileType: type);
-
-      if (!mounted) return;
-      setState(() => _members.add(member));
-      Navigator.pop(sheetCtx);
-      ErrorHandler.showSuccess(context, '$name added to your family');
-    } catch (e) {
-      ErrorHandler.showError(context, 'Failed to save member: $e');
-    }
-  }
-
   // ── Delete member — long-press with confirmation ───────────────────────────
   Future<void> _confirmDeleteMember(FamilyMember member) async {
     final confirmed = await showDialog<bool>(
@@ -373,6 +216,21 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
       appBar: AppBar(
         title: const Text('My Family'),
         actions: [
+          // Admin: Manage Family button
+          FutureBuilder<String?>(
+            future: _authService.userRole,
+            builder: (ctx, snapshot) {
+              if (snapshot.data == 'admin') {
+                return IconButton(
+                  icon: const Icon(Icons.people_outline_rounded),
+                  tooltip: 'Manage Family Members',
+                  onPressed: () => Navigator.of(context)
+                      .pushNamed('/admin_member_management'),
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           // Sign out button
           IconButton(
             icon: const Icon(Icons.logout_rounded),
@@ -431,14 +289,6 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
           : _members.isEmpty
               ? _emptyState()
               : _memberList(),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddMemberDialog,
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add member',
-            style: TextStyle(fontWeight: FontWeight.w600)),
-      ),
     );
   }
 
