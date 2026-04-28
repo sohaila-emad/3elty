@@ -17,20 +17,20 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
 
   // Egypt MOH Vaccination Schedule (Age in months)
   final List<Map<String, dynamic>> _mohSchedule = [
-    {'vaccine': 'BCG', 'age': 'At Birth', 'ageMonths': 0},
-    {'vaccine': 'Hepatitis B (Birth Dose)', 'age': 'At Birth', 'ageMonths': 0},
-    {'vaccine': 'DPT 1', 'age': '2 months', 'ageMonths': 2},
-    {'vaccine': 'Polio 1', 'age': '2 months', 'ageMonths': 2},
-    {'vaccine': 'Hepatitis B 1', 'age': '2 months', 'ageMonths': 2},
-    {'vaccine': 'DPT 2', 'age': '4 months', 'ageMonths': 4},
-    {'vaccine': 'Polio 2', 'age': '4 months', 'ageMonths': 4},
-    {'vaccine': 'Hepatitis B 2', 'age': '4 months', 'ageMonths': 4},
-    {'vaccine': 'DPT 3', 'age': '6 months', 'ageMonths': 6},
-    {'vaccine': 'Polio 3', 'age': '6 months', 'ageMonths': 6},
-    {'vaccine': 'Hepatitis B 3', 'age': '6 months', 'ageMonths': 6},
-    {'vaccine': 'MMR', 'age': '12 months', 'ageMonths': 12},
-    {'vaccine': 'DPT Booster 1', 'age': '18 months', 'ageMonths': 18},
-    {'vaccine': 'Polio Booster', 'age': '18 months', 'ageMonths': 18},
+    {'vaccine': 'BCG', 'age': 'عند الولادة', 'ageMonths': 0},
+    {'vaccine': 'Hepatitis B (Birth Dose)', 'age': 'عند الولادة', 'ageMonths': 0},
+    {'vaccine': 'DPT 1', 'age': 'شهران', 'ageMonths': 2},
+    {'vaccine': 'Polio 1', 'age': 'شهران', 'ageMonths': 2},
+    {'vaccine': 'Hepatitis B 1', 'age': 'شهران', 'ageMonths': 2},
+    {'vaccine': 'DPT 2', 'age': '٤ أشهر', 'ageMonths': 4},
+    {'vaccine': 'Polio 2', 'age': '٤ أشهر', 'ageMonths': 4},
+    {'vaccine': 'Hepatitis B 2', 'age': '٤ أشهر', 'ageMonths': 4},
+    {'vaccine': 'DPT 3', 'age': '٦ أشهر', 'ageMonths': 6},
+    {'vaccine': 'Polio 3', 'age': '٦ أشهر', 'ageMonths': 6},
+    {'vaccine': 'Hepatitis B 3', 'age': '٦ أشهر', 'ageMonths': 6},
+    {'vaccine': 'MMR', 'age': '١٢ شهراً', 'ageMonths': 12},
+    {'vaccine': 'DPT Booster 1', 'age': '١٨ شهراً', 'ageMonths': 18},
+    {'vaccine': 'Polio Booster', 'age': '١٨ شهراً', 'ageMonths': 18},
   ];
 
   @override
@@ -55,7 +55,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showError('Failed to load vaccinations: $e');
+      _showError('تعذّر تحميل التطعيمات: $e');
     }
   }
 
@@ -68,7 +68,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
     final t = widget.member.profileType;
     return Scaffold(
       backgroundColor: AppColors.grey50,
-      appBar: AppBar(title: const Text('Vaccinations')),
+      appBar: AppBar(title: const Text('التطعيمات')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : Column(
@@ -104,7 +104,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
                                   width: 48,
                                   height: 48,
                                   decoration: BoxDecoration(
-                                    color: logged ? AppColors.green.withOpacity(0.1) : AppColors.grey100,
+                                    color: logged ? AppColors.green.withValues(alpha: 0.1) : AppColors.grey100,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                   child: Icon(
@@ -142,7 +142,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           // TODO: Show add vaccination dialog
-          _showSuccess('Vaccination tracking - Mark as Given');
+          _showSuccess('تتبع التطعيمات - تم الأخذ');
         },
         backgroundColor: AppColors.teal,
         child: const Icon(Icons.add, color: Colors.white),

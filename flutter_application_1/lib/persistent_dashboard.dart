@@ -1,34 +1,9 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// HOW TO USE THIS FILE
-//
-// 1. Add to pubspec.yaml:
-//      sqflite: ^2.3.3
-//      path: ^1.9.0
-//      path_provider: ^2.1.3
-//      shared_preferences: ^2.2.3
-//      image_picker: ^1.1.2
-//
-// 2. Place database_provider.dart and app_repository.dart in lib/data/
-//
-// 3. Replace your existing FamilyDashboard widget with the one below.
-//    The rest of your main.dart (AppColors, ProfileType, E3ltyApp,
-//    AdminSignUpScreen, MemberProfileScreen etc.) stays unchanged.
-//
-// Key changes vs the previous version:
-//  • FamilyDashboard is now async — it loads members from SQLite on init.
-//  • Adding a member writes to SQLite and refreshes the list.
-//  • Deleting a member (long-press) removes it from SQLite (cascade-deletes
-//    all related vitals, meds, appointments, documents).
-//  • FamilyMember now carries a nullable `id` so DB rows round-trip cleanly.
-// ─────────────────────────────────────────────────────────────────────────────
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'auth_service.dart';
 import 'services/remote_auth_service.dart';
 import 'main.dart';
 import 'data/app_repository.dart';
-import 'utils/validators.dart';
 import 'utils/error_handler.dart';
 
 // ─── Persistent FamilyDashboard ───────────────────────────────────────────────
@@ -52,14 +27,13 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
     _loadMembers();
   }
 
-  // ── Load from SQLite ────────────────────────────────────────────────────────
   Future<void> _loadMembers() async {
     setState(() => _loading = true);
     try {
       final familyId = await _authService.familyId;
       
       if (familyId == null) {
-        _showError('Family not found. Please sign in again.');
+        _showError('لم يتم العثور على العائلة. يرجى تسجيل الدخول مجدداً.');
         return;
       }
       
@@ -72,34 +46,32 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showError('Could not load family members: $e');
+      _showError('تعذّر تحميل أفراد العائلة: $e');
     }
   }
 
-  // ── Add member — writes to SQLite ───────────────────────────────────────────
-  // ── Delete member — long-press with confirmation ───────────────────────────
   Future<void> _confirmDeleteMember(FamilyMember member) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('Remove ${member.name}?',
+        title: Text('حذف ${member.name}؟',
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         content: const Text(
-          'This will permanently delete all their health data — medications, vitals, appointments and documents.',
+          'سيتم حذف جميع بياناته الصحية نهائياً — الأدوية والعلامات الحيوية والمواعيد والوثائق.',
           style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5),
         ),
         actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel',
+            child: const Text('إلغاء',
                 style: TextStyle(color: AppColors.grey600)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            child: const Text('حذف', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -111,13 +83,12 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
       await _repo.deleteMember(member.id!);
       if (!mounted) return;
       setState(() => _members.removeWhere((m) => m.id == member.id));
-      _showSuccess('${member.name} removed');
+      _showSuccess('تم حذف ${member.name}');
     } catch (e) {
-      _showError('Could not delete member: $e');
+      _showError('تعذّر حذف الفرد: $e');
     }
   }
 
-  // ── SOS ───────────────────────────────────────────────────────────────────
   void _showSOSConfirmation() {
     showDialog(
       context: context,
@@ -130,11 +101,11 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
             color: AppColors.redLight, shape: BoxShape.circle),
           child: const Icon(Icons.sos_rounded, color: AppColors.red, size: 32),
         ),
-        title: const Text('Send emergency alert?',
+        title: const Text('إرسال تنبيه طارئ؟',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         content: const Text(
-          'This will broadcast your GPS location to ALL family members.\n\nOnly use in a real emergency.',
+          'سيتم بث موقعك الجغرافي لجميع أفراد العائلة.\n\nاستخدم هذا في حالات الطوارئ الحقيقية فقط.',
           textAlign: TextAlign.center,
           style: TextStyle(fontSize: 15, color: AppColors.grey600, height: 1.5),
         ),
@@ -150,7 +121,7 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('No, cancel',
+              child: const Text('لا، إلغاء',
                   style: TextStyle(color: AppColors.grey900, fontSize: 16)),
             ),
           ),
@@ -174,12 +145,12 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                   content: const Row(children: [
                     Icon(Icons.check_circle_rounded, color: Colors.white),
                     SizedBox(width: 12),
-                    Expanded(child: Text('Emergency alert sent to all family members',
+                    Expanded(child: Text('تم إرسال تنبيه الطوارئ لجميع أفراد العائلة',
                         style: TextStyle(color: Colors.white))),
                   ]),
                 ));
               },
-              child: const Text('Yes, send SOS',
+              child: const Text('نعم، أرسل SOS',
                   style: TextStyle(color: Colors.white, fontSize: 16,
                       fontWeight: FontWeight.w700)),
             ),
@@ -189,41 +160,24 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
     );
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  InputDecoration _sheetDecoration(String label, String? hint) =>
-      InputDecoration(
-        labelText: label,
-        hintText: hint,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.grey200)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.grey200)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: AppColors.teal, width: 2)),
-      );
-
   void _showSuccess(String msg) => ErrorHandler.showSuccess(context, msg);
 
   void _showError(String msg) => ErrorHandler.showError(context, msg);
 
-  // ── Build ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.grey50,
       appBar: AppBar(
-        title: const Text('My Family'),
+        title: const Text('عيلتي'),
         actions: [
-          // Admin: Manage Family button
           FutureBuilder<String?>(
             future: _authService.userRole,
             builder: (ctx, snapshot) {
               if (snapshot.data == 'admin') {
                 return IconButton(
                   icon: const Icon(Icons.people_outline_rounded),
-                  tooltip: 'Manage Family Members',
+                  tooltip: 'إدارة أفراد العائلة',
                   onPressed: () => Navigator.of(context)
                       .pushNamed('/admin_member_management'),
                 );
@@ -231,25 +185,24 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
               return const SizedBox.shrink();
             },
           ),
-          // Sign out button
           IconButton(
             icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Sign out',
+            tooltip: 'تسجيل الخروج',
             onPressed: () async {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  title: const Text('Sign out?'),
-                  content: const Text('You will need to sign in again to access your family data.'),
+                  title: const Text('تسجيل الخروج؟'),
+                  content: const Text('ستحتاج إلى تسجيل الدخول مجدداً للوصول إلى بيانات عائلتك.'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('Cancel'),
+                      child: const Text('إلغاء'),
                     ),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Sign out', style: TextStyle(color: Colors.white)),
+                      child: const Text('خروج', style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
@@ -261,9 +214,8 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
               }
             },
           ),
-          // SOS button
           Padding(
-            padding: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.only(left: 8),
             child: Material(
               color: AppColors.redLight,
               borderRadius: BorderRadius.circular(12),
@@ -303,10 +255,10 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
           child: const Icon(Icons.group_add_rounded, size: 48, color: AppColors.teal),
         ),
         const SizedBox(height: 24),
-        const Text('No family members yet',
+        const Text('لا يوجد أفراد عائلة بعد',
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
-        const Text('Tap the button below to add your first family member.',
+        const Text('اضغط الزر أدناه لإضافة أول فرد في عائلتك.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 15, color: AppColors.grey600, height: 1.5)),
       ]),
@@ -316,7 +268,7 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   Widget _memberList() => ListView.separated(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
     itemCount: _members.length,
-    separatorBuilder: (_, __) => const SizedBox(height: 10),
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
     itemBuilder: (_, i) {
       final member = _members[i];
       return _MemberCard(
@@ -327,14 +279,13 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
             builder: (_) => MemberProfileScreen(member: member),
           ),
         ),
-        // Long-press to delete
         onLongPress: () => _confirmDeleteMember(member),
       );
     },
   );
 }
 
-// ── Member card (adds onLongPress) ────────────────────────────────────────────
+// ── Member card ────────────────────────────────────────────────────────────────
 class _MemberCard extends StatelessWidget {
   final FamilyMember member;
   final VoidCallback onTap;
@@ -384,12 +335,12 @@ class _MemberCard extends StatelessWidget {
                             color: t.color)),
                   ),
                   const SizedBox(width: 8),
-                  Text('${member.age} yrs',
+                  Text('${member.age} سنة',
                       style: const TextStyle(fontSize: 13, color: AppColors.grey600)),
                 ]),
               ]),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.grey600),
+            const Icon(Icons.chevron_left_rounded, color: AppColors.grey600),
           ]),
         ),
       ),

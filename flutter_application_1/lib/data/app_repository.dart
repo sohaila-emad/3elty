@@ -274,6 +274,53 @@ class VaccinationRecord {
       );
 }
 
+class UltrasoundRecord {
+  final int? id;
+  final String familyId;
+  final String memberId;
+  final String monthLabel;
+  final String sessionType;
+  final String date;
+  final String doctor;
+  final String notes;
+  final String createdAt;
+
+  UltrasoundRecord({
+    this.id,
+    required this.familyId,
+    required this.memberId,
+    required this.monthLabel,
+    required this.sessionType,
+    required this.date,
+    required this.doctor,
+    required this.notes,
+    this.createdAt = '',
+  });
+
+  factory UltrasoundRecord.fromMap(Map<String, dynamic> m) => UltrasoundRecord(
+        id: m['id'] as int?,
+        familyId: m['family_id'] as String,
+        memberId: m['member_id'].toString(),
+        monthLabel: m['month_label'] as String,
+        sessionType: m['session_type'] as String,
+        date: m['date'] as String,
+        doctor: m['doctor'] as String,
+        notes: m['notes'] as String,
+        createdAt: m['created_at'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'month_label': monthLabel,
+        'session_type': sessionType,
+        'date': date,
+        'doctor': doctor,
+        'notes': notes,
+      };
+}
+
 // ─── Repository ───────────────────────────────────────────────────────────────
 
 /// Single access point for all DB reads and writes.
@@ -465,7 +512,31 @@ class AppRepository {
         await getVitalsForMember(memberId, type: type, limit: 1);
     return vitals.isEmpty ? null : vitals.first;
   }
+// ══ Ultrasounds ════════════════════════════════════════════════════════════
 
+  /// Insert an ultrasound record.
+  Future<int> insertUltrasound(UltrasoundRecord r) async {
+    final db = await _db;
+    return db.insert('ultrasounds', r.toMap());
+  }
+
+  /// Get ultrasound records for a member.
+  Future<List<UltrasoundRecord>> getUltrasoundsForMember(String memberId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'ultrasounds',
+      where: 'member_id = ?',
+      whereArgs: [memberId],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(UltrasoundRecord.fromMap).toList();
+  }
+
+  /// Delete an ultrasound record.
+  Future<void> deleteUltrasound(int id) async {
+    final db = await _db;
+    await db.delete('ultrasounds', where: 'id = ?', whereArgs: [id]);
+  }
   // ══ Appointments ═══════════════════════════════════════════════════════════
 
   /// Add an appointment using a map (from Firestore).

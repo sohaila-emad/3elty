@@ -40,7 +40,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showError('Failed to load growth data: $e');
+      _showError('تعذّر تحميل بيانات النمو: $e');
     }
   }
 
@@ -56,7 +56,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Log Growth Data'),
+        title: const Text('تسجيل بيانات النمو'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -64,7 +64,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
               controller: heightCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                hintText: 'Height (cm)',
+                hintText: 'الطول (سم)',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 prefixIcon: const Icon(Icons.straighten, color: AppColors.teal),
               ),
@@ -74,7 +74,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
               controller: weightCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
-                hintText: 'Weight (kg)',
+                hintText: 'الوزن (كجم)',
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 prefixIcon: const Icon(Icons.scale, color: AppColors.teal),
               ),
@@ -82,21 +82,25 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () async {
               final heightStr = heightCtrl.text.trim();
               final weightStr = weightCtrl.text.trim();
               
               if (heightStr.isEmpty && weightStr.isEmpty) {
-                _showError('Please enter height or weight');
+                _showError('يرجى إدخال الطول أو الوزن');
                 return;
               }
               
+              final navigator = Navigator.of(ctx);
+              final messenger = ScaffoldMessenger.of(context);
+
               try {
                 final familyId = await _authService.familyId;
+                if (!mounted) return;
                 if (familyId == null) {
-                  _showError('Family not found. Please sign in again.');
+                  _showError('لم يتم العثور على العائلة. يرجى تسجيل الدخول مجدداً.');
                   return;
                 }
                 
@@ -104,7 +108,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                 if (heightStr.isNotEmpty) {
                   final height = double.tryParse(heightStr);
                   if (height == null || height <= 0) {
-                    _showError('Height must be a valid positive number');
+                    _showError('يجب أن يكون الطول رقماً موجباً صحيحاً');
                     return;
                   }
                   await _repo.insertVital(VitalRecord(
@@ -120,7 +124,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                 if (weightStr.isNotEmpty) {
                   final weight = double.tryParse(weightStr);
                   if (weight == null || weight <= 0) {
-                    _showError('Weight must be a valid positive number');
+                    _showError('يجب أن يكون الوزن رقماً موجباً صحيحاً');
                     return;
                   }
                   await _repo.insertVital(VitalRecord(
@@ -133,13 +137,18 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                 }
                 
                 if (!mounted) return;
-                Navigator.pop(ctx);
-                _showSuccess('Growth data logged successfully');
+                navigator.pop();
+                messenger.showSnackBar(SnackBar(
+                  backgroundColor: AppColors.green,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  content: const Text('تم تسجيل بيانات النمو بنجاح', style: TextStyle(color: Colors.white)),
+                ));
                 heightCtrl.dispose();
                 weightCtrl.dispose();
                 await _loadVitals();
               } catch (e) {
-                _showError('Failed to save growth data: $e');
+                _showError('تعذّر حفظ بيانات النمو: $e');
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.teal),
@@ -164,7 +173,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
     
     return Scaffold(
       backgroundColor: AppColors.grey50,
-      appBar: AppBar(title: const Text('Growth Tracking')),
+      appBar: AppBar(title: const Text('تتبع النمو')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : CustomScrollView(
@@ -274,7 +283,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList.separated(
                       itemCount: _vitals.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (_, i) {
                         final vital = _vitals[i];
                         final isHeight = vital.type == 'height';
@@ -289,7 +298,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: isHeight ? AppColors.teal.withOpacity(0.1) : AppColors.green.withOpacity(0.1),
+                                    color: isHeight ? AppColors.teal.withValues(alpha: 0.1) : AppColors.green.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Icon(
