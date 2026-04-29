@@ -14,6 +14,7 @@ import 'modules/appointments_screen.dart';
 import 'modules/documents_screen.dart';
 import 'modules/vaccinations_screen.dart';
 import 'modules/growth_tracking_screen.dart';
+import 'modules/medical_pdf_export_screen.dart';
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 class AppColors {
@@ -32,6 +33,8 @@ class AppColors {
   static const grey500   = Color(0xFF9E9E9E);
   static const grey600   = Color(0xFF757575);
   static const grey900   = Color(0xFF212121);
+
+  static Color? get grey700 => null;
 }
 
 const double kMinTouch = 44.0;
@@ -579,9 +582,11 @@ class MemberProfileScreen extends StatelessWidget {
       case 'growth':
         screen = GrowthTrackingScreen(member: member);
         break;
+      case 'monthly_report':
+        screen = MedicalPdfExportScreen(member: member);
+        break;
       case 'prenatal_tests':
       case 'food_safety':
-      case 'monthly_report':
       default:
         // Coming soon modules — show placeholder
         ScaffoldMessenger.of(context).showSnackBar(
