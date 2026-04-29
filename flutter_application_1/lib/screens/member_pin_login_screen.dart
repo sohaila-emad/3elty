@@ -1,0 +1,503 @@
+import 'package:flutter/material.dart';
+import '../services/remote_auth_service.dart';
+
+class MemberPinLoginScreen extends StatefulWidget {
+  const MemberPinLoginScreen({super.key});
+
+  @override
+  State<MemberPinLoginScreen> createState() => _MemberPinLoginScreenState();
+}
+
+class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
+  final _phoneController = TextEditingController();
+  final _pinController = TextEditingController();
+  final _authService = RemoteAuthService();
+
+  bool _isLoading = false;
+  String? _errorMessage;
+  int _failedAttempts = 0;
+  bool _isLocked = false;
+  int _lockoutMinutesRemaining = 0;
+  late DateTime _lockoutExpiry;
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _pinController.dispose();
+    super.dispose();
+  }
+
+  /// Add digit to PIN (max 4 digits)
+  void _addPinDigit(String digit) {
+    if (_pinController.text.length < 4 && !_isLocked) {
+      setState(() => _pinController.text += digit);
+      _clearError();
+    }
+  }
+
+  /// Remove last digit from PIN
+  void _removePinDigit() {
+    if (_pinController.text.isNotEmpty && !_isLocked) {
+      setState(() {
+        _pinController.text =
+            _pinController.text.substring(0, _pinController.text.length - 1);
+      });
+      _clearError();
+    }
+  }
+
+  /// Clear phone field
+  void _clearPhone() {
+    setState(() => _phoneController.clear());
+    _clearError();
+  }
+
+  /// Clear PIN field
+  void _clearPin() {
+    setState(() => _pinController.clear());
+    _clearError();
+  }
+
+  /// Clear error message
+  void _clearError() {
+    setState(() => _errorMessage = null);
+  }
+
+  /// Format phone number for display (remove non-digits)
+  String _formatPhone(String phone) {
+    return phone.replaceAll(RegExp(r'\D'), '');
+  }
+
+  /// Handle PIN login attempt
+  Future<void> _handleLogin() async {
+    if (_isLocked) {
+      _showError('الحساب مقفول. حاول لاحقاً.');
+      return;
+    }
+
+    final phone = _formatPhone(_phoneController.text);
+    final pin = _pinController.text;
+
+    if (phone.isEmpty || phone.length < 10) {
+      _showError('من فضلك أدخل رقم هاتف صحيح');
+      return;
+    }
+
+    if (pin.isEmpty || pin.length != 4) {
+      _showError('من فضلك أدخل PIN مكوّن من 4 أرقام');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final familyId = await _authService.signInWithPin(phone: phone, pin: pin);
+
+      if (mounted) {
+        // Navigate to dashboard on success
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+      }
+    } catch (e) {
+      final errorMsg = e.toString().replaceFirst('Exception: ', '');
+
+      if (errorMsg.contains('locked')) {
+        setState(() {
+          _isLocked = true;
+          _lockoutExpiry = DateTime.now().add(const Duration(minutes: 30));
+          _startLockoutCountdown();
+        });
+      } else if (errorMsg.contains('Attempts remaining')) {
+        final remaining = int.tryParse(
+              errorMsg.split('Attempts remaining: ')[1].split(')').first,
+            ) ??
+            0;
+        setState(() => _failedAttempts = 3 - remaining);
+      }
+
+      _showError(errorMsg);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  /// Show error message for 3 seconds
+  void _showError(String message) {
+    setState(() => _errorMessage = message);
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        _clearError();
+      }
+    });
+  }
+
+  /// Start countdown timer for lockout
+  void _startLockoutCountdown() {
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (!mounted) return false;
+
+      final remaining = _lockoutExpiry.difference(DateTime.now()).inMinutes;
+
+      if (remaining <= 0) {
+        setState(() {
+          _isLocked = false;
+          _failedAttempts = 0;
+          _clearPhone();
+          _clearPin();
+        });
+        _showError('تم فك القفل. يمكنك المحاولة الآن.');
+        return false;
+      }
+
+      setState(() => _lockoutMinutesRemaining = remaining);
+      return true;
+    });
+  }
+
+  /// Build numeric keypad button
+  Widget _buildKeypadButton(String digit, {VoidCallback? onPressed}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _isLocked ? null : onPressed,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _isLocked ? Colors.grey[300] : Colors.teal.shade50,
+            border: Border.all(
+              color: _isLocked ? Colors.grey : Colors.teal,
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(
+              digit,
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: _isLocked ? Colors.grey : Colors.teal,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Build action button (Confirm, Back, Clear)
+  Widget _buildActionButton({
+    required String label,
+    required VoidCallback onPressed,
+    required Color backgroundColor,
+    Color textColor = Colors.white,
+  }) {
+    return SizedBox(
+      height: 56,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isLocked && label == 'Confirm' ? null : onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: (_isLocked && label == 'Confirm')
+                  ? Colors.grey
+                  : backgroundColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final padding = isMobile ? 16.0 : 32.0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('دخول الأعضاء'),
+        backgroundColor: Colors.teal,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        elevation: 0,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(padding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(height: 24),
+
+              // Title
+              Text(
+                'تسجيل الدخول بالـ PIN',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 28,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'أدخل رقم هاتفك والـ PIN المكون من 4 أرقام',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Colors.grey[600],
+                      fontSize: 16,
+                    ),
+              ),
+              const SizedBox(height: 32),
+
+              // Error Message (Large, High-Contrast)
+              if (_errorMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: _isLocked ? Colors.orange[50] : Colors.red[50],
+                    border: Border.all(
+                      color: _isLocked ? Colors.orange : Colors.red,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(
+                      color: _isLocked ? Colors.orange[900] : Colors.red[900],
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              if (_errorMessage != null) const SizedBox(height: 16),
+
+              // Lockout Timer (if locked)
+              if (_isLocked)
+                Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.yellow[50],
+                        border: Border.all(color: Colors.orange, width: 2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            'الحساب مقفول',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange[900],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'حاول مرة أخرى بعد $_lockoutMinutesRemaining دقيقة',
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.orange[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+
+              // Phone Number Input
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.teal,
+                    width: 2,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  controller: _phoneController,
+                  enabled: !_isLocked,
+                  keyboardType: TextInputType.phone,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  decoration: InputDecoration(
+                    labelText: 'رقم الهاتف',
+                    hintText: 'أدخل رقم الهاتف',
+                    border: InputBorder.none,
+                    prefixIcon: Icon(
+                      Icons.phone,
+                      size: 24,
+                      color: Colors.teal[700],
+                    ),
+                    suffixIcon: _phoneController.text.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear, size: 24, color: Colors.red[700]),
+                            onPressed: _clearPhone,
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    labelStyle: const TextStyle(fontSize: 16),
+                  ),
+                  onChanged: (value) => setState(() {}),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // PIN Display
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  border: Border.all(color: Colors.teal, width: 2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      'الرقم السري',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(
+                        4,
+                        (index) => Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 8),
+                          width: 56,
+                          height: 56,
+                          decoration: BoxDecoration(
+                            color: index < _pinController.text.length
+                                ? Colors.teal
+                                : Colors.white,
+                            border: Border.all(
+                              color: Colors.teal,
+                              width: 2,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Center(
+                            child: index < _pinController.text.length
+                                ? const Text(
+                                    '●',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 24,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Attempt Counter (if applicable)
+              if (_failedAttempts > 0 && !_isLocked)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[50],
+                    border: Border.all(color: Colors.orange, width: 1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'المحاولات الفاشلة: $_failedAttempts/3',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.orange[900],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              if (_failedAttempts > 0 && !_isLocked) const SizedBox(height: 16),
+
+              // Numeric Keypad (large buttons for elderly)
+              Container(
+                constraints: BoxConstraints(maxWidth: min(screenWidth - padding * 2, 320)),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  childAspectRatio: 1.2,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    // Row 1: 1, 2, 3
+                    _buildKeypadButton('1', onPressed: () => _addPinDigit('1')),
+                    _buildKeypadButton('2', onPressed: () => _addPinDigit('2')),
+                    _buildKeypadButton('3', onPressed: () => _addPinDigit('3')),
+                    // Row 2: 4, 5, 6
+                    _buildKeypadButton('4', onPressed: () => _addPinDigit('4')),
+                    _buildKeypadButton('5', onPressed: () => _addPinDigit('5')),
+                    _buildKeypadButton('6', onPressed: () => _addPinDigit('6')),
+                    // Row 3: 7, 8, 9
+                    _buildKeypadButton('7', onPressed: () => _addPinDigit('7')),
+                    _buildKeypadButton('8', onPressed: () => _addPinDigit('8')),
+                    _buildKeypadButton('9', onPressed: () => _addPinDigit('9')),
+                    // Row 4: Backspace, 0, Clear
+                    _buildKeypadButton(
+                      '⌫',
+                      onPressed: _removePinDigit,
+                    ),
+                    _buildKeypadButton('0', onPressed: () => _addPinDigit('0')),
+                    _buildKeypadButton(
+                      'C',
+                      onPressed: _clearPin,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Confirm Button
+              _buildActionButton(
+                label: _isLoading ? 'جاري الدخول...' : 'تأكيد',
+                onPressed: _isLoading ? () {} : _handleLogin,
+                backgroundColor: Colors.teal,
+              ),
+              const SizedBox(height: 12),
+
+              // Back to Family Login Button
+              _buildActionButton(
+                label: 'العودة لتسجيل دخول العائلة',
+                onPressed: () => Navigator.of(context).pop(),
+                backgroundColor: Colors.grey[400]!,
+                textColor: Colors.black87,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+double min(double a, double b) => a < b ? a : b;

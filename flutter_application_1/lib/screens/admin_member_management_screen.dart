@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
+import '../data/app_repository.dart';
 import '../services/firestore_service.dart';
+import '../services/remote_auth_service.dart';
 import '../utils/error_handler.dart';
 
 /// شاشة إدارة أفراد العائلة - للمشرفين فقط (إضافة / تعديل / حذف)
@@ -14,26 +16,20 @@ class AdminMemberManagementScreen extends StatefulWidget {
 
 class _AdminMemberManagementScreenState
     extends State<AdminMemberManagementScreen> {
+  final _repo = AppRepository.instance;
   final _firestoreService = FirestoreService.instance;
+  final _authService = RemoteAuthService();
 
   List<Map<String, dynamic>> _members = [];
   bool _loading = true;
 
   // خيارات أنواع الملفات الشخصية
   static const List<Map<String, dynamic>> _profileOptions = [
-    {'type': 'child', 'label': 'طفل', 'icon': Icons.child_care_rounded},
-    {'type': 'elderly', 'label': 'كبير سن', 'icon': Icons.elderly_rounded},
-    {
-      'type': 'pregnant',
-      'label': 'حامل',
-      'icon': Icons.pregnant_woman_rounded
-    },
-    {
-      'type': 'chronic',
-      'label': 'مريض مزمن',
-      'icon': Icons.monitor_heart_outlined
-    },
-    {'type': 'adult', 'label': 'بالغ', 'icon': Icons.person_rounded},
+    {'type': 'child',    'label': 'طفل',         'icon': Icons.child_care_rounded},
+    {'type': 'adult',    'label': 'بالغ',         'icon': Icons.person_rounded},
+    {'type': 'pregnant', 'label': 'حامل',         'icon': Icons.pregnant_woman_rounded},
+    {'type': 'elderly',  'label': 'كبير سن',      'icon': Icons.elderly_rounded},
+    {'type': 'chronic',  'label': 'مريض مزمن',   'icon': Icons.monitor_heart_outlined},
   ];
 
   @override
@@ -58,28 +54,22 @@ class _AdminMemberManagementScreenState
     }
   }
 
-  // ── Age thresholds ────────────────────────────────────────────────────────
-  // child   : 0 – 23 months  (stored as months when ageInMonths = true)
-  // adult   : 2 years (24 m) – 54 years
-  // elderly : 55 – 100 years
-  // pregnant: 15 – 45 years  (unchanged)
-  // chronic : 0 – 100 years  (no restriction)
+  // ── الحدود العمرية ────────────────────────────────────────────────────────
+  // طفل      : 0 – 23 شهراً  (يُخزَّن بالشهور أو السنوات)
+  // بالغ     : 20 – 59 سنة
+  // كبير سن  : 55 – 100 سنة
+  // حامل     : 15 – 45 سنة
+  // مريض مزمن: 0 – 100 سنة (بدون قيد)
 
-  /// Validates the entered age value against the selected profile type.
-  /// [ageValue] is always the raw number the user typed.
-  /// [ageInMonths] is true only when the child toggle is set to "months".
-  /// Returns an error message string, or null if valid.
   String? _validateAge({
     required String selectedType,
     required int ageValue,
     required bool ageInMonths,
   }) {
-    // Convert to years (fractional) for uniform comparison
     final double ageYears = ageInMonths ? ageValue / 12.0 : ageValue.toDouble();
 
     switch (selectedType) {
       case 'child':
-        // Accepts 0–23 months OR 0–1 year
         if (ageInMonths) {
           if (ageValue < 0 || ageValue > 23) {
             return 'عمر الطفل بالشهور يجب أن يكون بين 0 و 23 شهراً.';
@@ -104,8 +94,8 @@ class _AdminMemberManagementScreenState
         return null;
 
       case 'adult':
-        if (ageYears < 21|| ageYears >100){
-          return 'عمر البالغ يجب أن يكون بين 2 و 54 سنة.';
+        if (ageYears < 20 || ageYears > 59) {
+          return 'عمر البالغ يجب أن يكون بين 20 و 59 سنة.';
         }
         return null;
 
@@ -120,11 +110,30 @@ class _AdminMemberManagementScreenState
     }
   }
 
+  String _ageHint(String type, bool ageInMonths) {
+    switch (type) {
+      case 'child':
+        return ageInMonths
+            ? 'النطاق المسموح: 0 – 23 شهراً'
+            : 'النطاق المسموح: 0 – سنة (استخدم الشهور لأعمار أدق)';
+      case 'elderly':
+        return 'النطاق المسموح: 55 – 100 سنة';
+      case 'pregnant':
+        return 'النطاق المسموح: 15 – 45 سنة';
+      case 'adult':
+        return 'النطاق المسموح: 20 – 59 سنة';
+      case 'chronic':
+        return 'النطاق المسموح: 0 – 100 سنة';
+      default:
+        return '';
+    }
+  }
+
   Future<void> _showAddMemberSheet() async {
     final nameCtrl = TextEditingController();
     final ageCtrl  = TextEditingController();
-    String selectedType  = 'adult';
-    bool   ageInMonths   = false; // only relevant for child
+    String selectedType = 'adult';
+    bool   ageInMonths  = false;
 
     showModalBottomSheet(
       context: context,
@@ -143,8 +152,7 @@ class _AdminMemberManagementScreenState
               children: [
                 Center(
                   child: Container(
-                    width: 40,
-                    height: 4,
+                    width: 40, height: 4,
                     decoration: BoxDecoration(
                         color: AppColors.grey200,
                         borderRadius: BorderRadius.circular(2)),
@@ -181,8 +189,7 @@ class _AdminMemberManagementScreenState
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           const Text('شهور',
-                              style: TextStyle(
-                                  fontSize: 12, color: AppColors.grey600)),
+                              style: TextStyle(fontSize: 12, color: AppColors.grey600)),
                           const SizedBox(height: 4),
                           Switch(
                             value: ageInMonths,
@@ -205,8 +212,7 @@ class _AdminMemberManagementScreenState
                   padding: const EdgeInsets.only(top: 6, right: 4),
                   child: Text(
                     _ageHint(selectedType, ageInMonths),
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.grey400),
+                    style: const TextStyle(fontSize: 12, color: AppColors.grey400),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -228,7 +234,6 @@ class _AdminMemberManagementScreenState
                     return GestureDetector(
                       onTap: () => setModalState(() {
                         selectedType = opt['type'] as String;
-                        // reset months toggle when switching away from child
                         if (selectedType != 'child') ageInMonths = false;
                         ageCtrl.clear();
                       }),
@@ -243,21 +248,16 @@ class _AdminMemberManagementScreenState
                             color: selected ? pt.color : AppColors.grey200,
                           ),
                         ),
-                        child:
-                            Row(mainAxisSize: MainAxisSize.min, children: [
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
                           Icon(opt['icon'] as IconData,
                               size: 16,
-                              color: selected
-                                  ? Colors.white
-                                  : AppColors.grey600),
+                              color: selected ? Colors.white : AppColors.grey600),
                           const SizedBox(width: 6),
                           Text(opt['label'] as String,
                               style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
-                                  color: selected
-                                      ? Colors.white
-                                      : AppColors.grey600)),
+                                  color: selected ? Colors.white : AppColors.grey600)),
                         ]),
                       ),
                     );
@@ -275,14 +275,12 @@ class _AdminMemberManagementScreenState
                       final name     = nameCtrl.text.trim();
                       final ageValue = int.tryParse(ageCtrl.text.trim());
 
-                      // 1. تحقق من الحقول الأساسية
                       if (name.isEmpty || ageValue == null) {
                         ErrorHandler.showError(
                             context, 'يرجى تعبئة الاسم والعمر بشكل صحيح');
                         return;
                       }
 
-                      // 2. تحقق من النطاق حسب نوع الملف
                       final ageError = _validateAge(
                         selectedType: selectedType,
                         ageValue: ageValue,
@@ -293,9 +291,8 @@ class _AdminMemberManagementScreenState
                         return;
                       }
 
-                      // 3. حفظ العمر — الطفل بالشهور يُخزَّن كـ double (0.x)
                       final int ageToSave = ageInMonths
-                          ? (ageValue / 12.0).round() // تقريب للسنة الأقرب
+                          ? (ageValue / 12.0).round()
                           : ageValue;
 
                       final navigator = Navigator.of(ctx);
@@ -315,8 +312,7 @@ class _AdminMemberManagementScreenState
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                           content: Text('تمت إضافة $name',
-                              style:
-                                  const TextStyle(color: Colors.white)),
+                              style: const TextStyle(color: Colors.white)),
                         ));
                       } catch (e) {
                         if (!mounted) return;
@@ -326,8 +322,7 @@ class _AdminMemberManagementScreenState
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12)),
                           content: Text('تعذّر الإضافة: $e',
-                              style:
-                                  const TextStyle(color: Colors.white)),
+                              style: const TextStyle(color: Colors.white)),
                         ));
                       }
                     },
@@ -341,50 +336,25 @@ class _AdminMemberManagementScreenState
     );
   }
 
-  /// Returns a short hint describing the allowed age range for a profile type.
-  String _ageHint(String type, bool ageInMonths) {
-    switch (type) {
-      case 'child':
-        return ageInMonths
-            ? 'النطاق المسموح: 0 – 23 شهراً'
-            : 'النطاق المسموح: 0 – سنة (استخدم الشهور لأعمار أدق)';
-      case 'elderly':
-        return 'النطاق المسموح: 55 – 100 سنة';
-      case 'pregnant':
-        return 'النطاق المسموح: 15 – 45 سنة';
-      case 'adult':
-        return 'النطاق المسموح: 2 – 54 سنة';
-      case 'chronic':
-        return 'النطاق المسموح: 0 – 100 سنة';
-      default:
-        return '';
-    }
-  }
-
   Future<void> _confirmDelete(Map<String, dynamic> member) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('حذف ${member['name']}؟',
-            style:
-                const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
         content: const Text(
             'سيتم حذف جميع بياناته الصحية نهائياً.',
-            style: TextStyle(
-                fontSize: 14, color: AppColors.grey600, height: 1.5)),
+            style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('إلغاء'),
           ),
           ElevatedButton(
-            style:
-                ElevatedButton.styleFrom(backgroundColor: AppColors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
             onPressed: () => Navigator.pop(ctx, true),
-            child:
-                const Text('حذف', style: TextStyle(color: Colors.white)),
+            child: const Text('حذف', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -442,35 +412,32 @@ class _AdminMemberManagementScreenState
         ),
       ),
       body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.teal))
+          ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : _members.isEmpty
               ? Center(
                   child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: const BoxDecoration(
-                          color: AppColors.tealLight,
-                          shape: BoxShape.circle),
-                      child: const Icon(Icons.group_add_rounded,
-                          size: 48, color: AppColors.teal),
-                    ),
-                    const SizedBox(height: 24),
-                    const Text('لا يوجد أفراد بعد',
-                        style: TextStyle(
-                            fontSize: 18, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    const Text('اضغط الزر أدناه لإضافة أول فرد.',
-                        style: TextStyle(
-                            fontSize: 14, color: AppColors.grey600)),
-                  ],
-                ))
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: const BoxDecoration(
+                            color: AppColors.tealLight, shape: BoxShape.circle),
+                        child: const Icon(Icons.group_add_rounded,
+                            size: 48, color: AppColors.teal),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text('لا يوجد أفراد بعد',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 8),
+                      const Text('اضغط الزر أدناه لإضافة أول فرد.',
+                          style: TextStyle(fontSize: 14, color: AppColors.grey600)),
+                    ],
+                  ),
+                )
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _members.length,
-                  separatorBuilder: (_, _x) => const SizedBox(height: 10),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
                     final m = _members[i];
                     final pt = ProfileType.values.firstWhere(
@@ -484,49 +451,45 @@ class _AdminMemberManagementScreenState
                         padding: const EdgeInsets.all(16),
                         child: Row(children: [
                           Container(
-                            width: 48,
-                            height: 48,
+                            width: 48, height: 48,
                             decoration: BoxDecoration(
                               color: pt.bgColor,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child:
-                                Icon(pt.icon, color: pt.color, size: 24),
+                            child: Icon(pt.icon, color: pt.color, size: 24),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(m['name'] ?? '—',
-                                      style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.grey900)),
-                                  const SizedBox(height: 4),
-                                  Row(children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: pt.bgColor,
-                                        borderRadius:
-                                            BorderRadius.circular(6),
-                                      ),
-                                      child: Text(pt.label,
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              fontWeight: FontWeight.w500,
-                                              color: pt.color)),
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(m['name'] ?? '—',
+                                    style: const TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.grey900)),
+                                const SizedBox(height: 4),
+                                Row(children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: pt.bgColor,
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Text('${m['age'] ?? '—'} سنة',
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.grey600)),
-                                  ]),
+                                    child: Text(pt.label,
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w500,
+                                            color: pt.color)),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text('${m['age'] ?? '—'} سنة',
+                                      style: const TextStyle(
+                                          fontSize: 12, color: AppColors.grey600)),
                                 ]),
+                              ],
+                            ),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline_rounded,

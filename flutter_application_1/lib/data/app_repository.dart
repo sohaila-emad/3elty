@@ -578,6 +578,16 @@ class AppRepository {
     return rows.map(AppointmentRecord.fromMap).toList();
   }
 
+  /// Get all appointments for an entire family (admin calendar).
+  Future<List<AppointmentRecord>> getAppointmentsForFamily(String familyId) async {
+    final db = await _db;
+    final rows = await db.query('appointments',
+        where: 'family_id = ?',
+        whereArgs: [familyId],
+        orderBy: 'scheduled_at ASC');
+    return rows.map(AppointmentRecord.fromMap).toList();
+  }
+
   /// Get upcoming appointments.
   Future<List<AppointmentRecord>> getUpcomingAppointments() async {
     final db = await _db;

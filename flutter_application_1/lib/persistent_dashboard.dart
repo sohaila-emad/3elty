@@ -175,12 +175,20 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
             future: _authService.userRole,
             builder: (ctx, snapshot) {
               if (snapshot.data == 'admin') {
-                return IconButton(
-                  icon: const Icon(Icons.people_outline_rounded),
-                  tooltip: 'إدارة أفراد العائلة',
-                  onPressed: () => Navigator.of(context)
-                      .pushNamed('/admin_member_management'),
-                );
+                return Row(mainAxisSize: MainAxisSize.min, children: [
+                  IconButton(
+                    icon: const Icon(Icons.calendar_month_rounded),
+                    tooltip: 'كالندر العائلة',
+                    onPressed: () => Navigator.of(context)
+                        .pushNamed('/admin_family_calendar'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.people_outline_rounded),
+                    tooltip: 'إدارة أفراد العائلة',
+                    onPressed: () => Navigator.of(context)
+                        .pushNamed('/admin_member_management'),
+                  ),
+                ]);
               }
               return const SizedBox.shrink();
             },

@@ -9,6 +9,10 @@ import 'modules/ultrasound_log_screen.dart';
 import 'services/remote_auth_service.dart';
 import 'screens/family_auth_screen.dart';
 import 'screens/admin_member_management_screen.dart';
+import 'screens/member_pin_login_screen.dart';
+import 'screens/member_setup_screen.dart';
+import 'screens/member_access_validation_dialog.dart';
+import 'screens/security_audit_screen.dart';
 import 'persistent_dashboard.dart';
 import 'widgets/protected_route.dart';
 import 'modules/medications_screen.dart';
@@ -17,6 +21,7 @@ import 'modules/appointments_screen.dart';
 import 'modules/documents_screen.dart';
 import 'modules/vaccinations_screen.dart';
 import 'modules/growth_tracking_screen.dart';
+import 'screens/admin_family_calendar_screen.dart';
 
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
@@ -442,6 +447,37 @@ class E3ltyApp extends StatelessWidget {
           requiredRole: 'admin',
           child: const AdminMemberManagementScreen(),
         ),
+        '/admin_family_calendar': (context) => ProtectedRoute(
+          requiredRole: 'admin',
+          child: const AdminFamilyCalendarScreen(),
+        ),
+        '/member_pin_login': (context) => const MemberPinLoginScreen(),
+      },
+      onGenerateRoute: (settings) {
+        if (settings.name == '/security_audit') {
+          final args = settings.arguments as Map<String, String>?;
+          return MaterialPageRoute(
+            builder: (context) => ProtectedRoute(
+              requiredRole: 'admin',
+              child: SecurityAuditScreen(
+                memberId: args?['memberId'] ?? '',
+                memberName: args?['memberName'] ?? '',
+              ),
+            ),
+          );
+        }
+        if (settings.name == '/member_setup') {
+          final args = settings.arguments as Map<String, dynamic>?;
+          return MaterialPageRoute(
+            builder: (context) => MemberSetupScreen(
+              newMemberId: args?['newMemberId'] ?? '',
+              newMemberName: args?['newMemberName'] ?? '',
+              newMemberAge: args?['newMemberAge'] ?? 0,
+              familyId: args?['familyId'] ?? '',
+            ),
+          );
+        }
+        return null;
       },
     );
   }
