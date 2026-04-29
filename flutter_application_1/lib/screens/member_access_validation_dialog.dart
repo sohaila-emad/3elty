@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/remote_auth_service.dart';
-import '../main.dart'; // To access AppColors
+// To access AppColors
 
 class MemberAccessValidationDialog extends StatefulWidget {
   final String memberName;

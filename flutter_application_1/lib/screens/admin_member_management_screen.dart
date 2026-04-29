@@ -186,7 +186,7 @@ class _AdminMemberManagementScreenState
                           const SizedBox(height: 4),
                           Switch(
                             value: ageInMonths,
-                            activeColor: AppColors.teal,
+                            activeThumbColor: AppColors.teal,
                             onChanged: (v) {
                               setModalState(() {
                                 ageInMonths = v;
@@ -470,7 +470,7 @@ class _AdminMemberManagementScreenState
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _members.length,
-                  separatorBuilder: (_, _x) => const SizedBox(height: 10),
+                  separatorBuilder: (_, x) => const SizedBox(height: 10),
                   itemBuilder: (_, i) {
                     final m = _members[i];
                     final pt = ProfileType.values.firstWhere(

@@ -285,7 +285,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _documents.length,
-                          separatorBuilder: (_, _x) =>
+                          separatorBuilder: (_, x) =>
                               const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final doc = _documents[i];

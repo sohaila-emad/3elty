@@ -52,6 +52,12 @@ dependencies:
   flutter_secure_storage: ^9.0.0
   crypto: ^3.0.3
 
+  table_calendar: any
+  intl: any
+  flutter_local_notifications: any
+  workmanager: any
+  pdf: any
+  firebase_messaging: any
 dev_dependencies:
   flutter_test:
     sdk: flutter
