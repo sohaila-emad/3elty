@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+.vscode/ 
+hs_err_pid*.log 
+*.log 
+android/.gradle/ 
+android/local.properties 
