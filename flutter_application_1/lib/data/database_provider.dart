@@ -15,7 +15,7 @@ class DatabaseProvider {
   }
 
   static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
@@ -134,6 +134,49 @@ class DatabaseProvider {
       )
     ''');
 
+    // Ultrasound records (pregnancy module)
+    batch.execute('''
+      CREATE TABLE ultrasounds (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        family_id    TEXT    NOT NULL,
+        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        month_label  TEXT    NOT NULL,
+        session_type TEXT    NOT NULL,
+        date         TEXT    NOT NULL,
+        doctor       TEXT    NOT NULL DEFAULT '',
+        notes        TEXT    NOT NULL DEFAULT '',
+        created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS prenatal_tests (
+        id           TEXT PRIMARY KEY,
+        member_id    TEXT NOT NULL,
+        test_name    TEXT NOT NULL,
+        trimester    INTEGER NOT NULL,
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT,
+        due_date     TEXT,
+        created_at   TEXT DEFAULT (datetime('now'))
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS vital_thresholds (
+        id          TEXT PRIMARY KEY,
+        member_id   TEXT NOT NULL,
+        family_id   TEXT,
+        vital_type  TEXT NOT NULL,
+        danger_min  REAL NOT NULL DEFAULT 0,
+        danger_max  REAL NOT NULL DEFAULT 999,
+        warning_min REAL NOT NULL DEFAULT 0,
+        warning_max REAL NOT NULL DEFAULT 999,
+        updated_at  TEXT DEFAULT (datetime('now')),
+        UNIQUE(member_id, vital_type)
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -243,7 +286,38 @@ class DatabaseProvider {
         )
       ''');
 
+      batch.execute('''
+        CREATE TABLE ultrasounds (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          family_id    TEXT    NOT NULL,
+          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          month_label  TEXT    NOT NULL,
+          session_type TEXT    NOT NULL,
+          date         TEXT    NOT NULL,
+          doctor       TEXT    NOT NULL DEFAULT '',
+          notes        TEXT    NOT NULL DEFAULT '',
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+      ''');
+
       await batch.commit(noResult: true);
+    }
+
+    // ── Migration v2 → v3: إضافة جدول ultrasounds ──────────────────────────
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ultrasounds (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          family_id    TEXT    NOT NULL,
+          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          month_label  TEXT    NOT NULL,
+          session_type TEXT    NOT NULL,
+          date         TEXT    NOT NULL,
+          doctor       TEXT    NOT NULL DEFAULT '',
+          notes        TEXT    NOT NULL DEFAULT '',
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+      ''');
     }
   }
 }

@@ -274,7 +274,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     sliver: SliverList.separated(
                       itemCount: _vitals.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (_, i) {
                         final vital = _vitals[i];
                         final isHeight = vital.type == 'height';

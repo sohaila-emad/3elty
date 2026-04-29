@@ -43,6 +43,7 @@ class VitalAlertService {
 
   /// Check a vital reading against thresholds
   /// Returns alert level and should trigger notification
+/// Check a vital reading against thresholds
   Future<(AlertLevel, bool)> checkVitalReading({
     required String memberId,
     required String vitalType,
@@ -50,39 +51,40 @@ class VitalAlertService {
     required String memberName,
   }) async {
     try {
-      // Get stored thresholds for this member
-      final threshold =
-          await AppRepository.instance.getVitalThreshold(memberId, vitalType);
+      // Hardcoded safe thresholds by vital type
+      double dangerMin, dangerMax, warningMin, warningMax;
 
-      if (threshold == null) {
-        // No threshold configured - treat as normal
-        return (AlertLevel.normal, false);
+      switch (vitalType.toLowerCase()) {
+        case 'blood_sugar':
+        case 'sugar':
+          dangerMin = 50;  dangerMax = 400;
+          warningMin = 70; warningMax = 250;
+          break;
+        case 'blood_pressure_systolic':
+        case 'systolic':
+          dangerMin = 70;  dangerMax = 180;
+          warningMin = 90; warningMax = 140;
+          break;
+        case 'blood_pressure_diastolic':
+        case 'diastolic':
+          dangerMin = 40;  dangerMax = 120;
+          warningMin = 60; warningMax = 90;
+          break;
+        default:
+          return (AlertLevel.normal, false);
       }
 
-      final dangerMin = threshold['danger_min'] as double?;
-      final dangerMax = threshold['danger_max'] as double?;
-      final warningMin = threshold['warning_min'] as double?;
-      final warningMax = threshold['warning_max'] as double?;
-
-      // Check danger zone first
-      if ((dangerMin != null && readingValue < dangerMin) ||
-          (dangerMax != null && readingValue > dangerMax)) {
+      if (readingValue < dangerMin || readingValue > dangerMax) {
         return (AlertLevel.danger, true);
       }
-
-      // Check warning zone
-      if ((warningMin != null && readingValue < warningMin) ||
-          (warningMax != null && readingValue > warningMax)) {
+      if (readingValue < warningMin || readingValue > warningMax) {
         return (AlertLevel.warning, true);
       }
-
       return (AlertLevel.normal, false);
     } catch (e) {
-      print('Error checking vital threshold: $e');
       return (AlertLevel.normal, false);
     }
   }
-
   /// Show verification dialog before sending danger alert
   /// (This should be called from UI context)
   /// Returns true if user confirms the reading is correct

@@ -274,6 +274,53 @@ class VaccinationRecord {
       );
 }
 
+class UltrasoundRecord {
+  final int? id;
+  final String familyId;
+  final String memberId;
+  final String monthLabel;
+  final String sessionType;
+  final String date;
+  final String doctor;
+  final String notes;
+  final String createdAt;
+
+  UltrasoundRecord({
+    this.id,
+    required this.familyId,
+    required this.memberId,
+    required this.monthLabel,
+    required this.sessionType,
+    required this.date,
+    required this.doctor,
+    required this.notes,
+    this.createdAt = '',
+  });
+
+  factory UltrasoundRecord.fromMap(Map<String, dynamic> m) => UltrasoundRecord(
+        id: m['id'] as int?,
+        familyId: m['family_id'] as String,
+        memberId: m['member_id'].toString(),
+        monthLabel: m['month_label'] as String,
+        sessionType: m['session_type'] as String,
+        date: m['date'] as String,
+        doctor: m['doctor'] as String,
+        notes: m['notes'] as String,
+        createdAt: m['created_at'] as String? ?? '',
+      );
+
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'month_label': monthLabel,
+        'session_type': sessionType,
+        'date': date,
+        'doctor': doctor,
+        'notes': notes,
+      };
+}
+
 // ─── Repository ───────────────────────────────────────────────────────────────
 
 /// Single access point for all DB reads and writes.
@@ -465,7 +512,31 @@ class AppRepository {
         await getVitalsForMember(memberId, type: type, limit: 1);
     return vitals.isEmpty ? null : vitals.first;
   }
+// ══ Ultrasounds ════════════════════════════════════════════════════════════
 
+  /// Insert an ultrasound record.
+  Future<int> insertUltrasound(UltrasoundRecord r) async {
+    final db = await _db;
+    return db.insert('ultrasounds', r.toMap());
+  }
+
+  /// Get ultrasound records for a member.
+  Future<List<UltrasoundRecord>> getUltrasoundsForMember(String memberId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'ultrasounds',
+      where: 'member_id = ?',
+      whereArgs: [memberId],
+      orderBy: 'created_at DESC',
+    );
+    return rows.map(UltrasoundRecord.fromMap).toList();
+  }
+
+  /// Delete an ultrasound record.
+  Future<void> deleteUltrasound(int id) async {
+    final db = await _db;
+    await db.delete('ultrasounds', where: 'id = ?', whereArgs: [id]);
+  }
   // ══ Appointments ═══════════════════════════════════════════════════════════
 
   /// Add an appointment using a map (from Firestore).
@@ -626,6 +697,83 @@ class AppRepository {
       where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+  // ══ Prenatal Tests ═════════════════════════════════════════════════════════
+
+  /// Get all prenatal tests for a member.
+  Future<List<Map<String, dynamic>>> getPrenatalTestsForMember(
+      String memberId) async {
+    final db = await _db;
+    final rows = await db.query(
+      'prenatal_tests',
+      where: 'member_id = ?',
+      whereArgs: [memberId],
+      orderBy: 'trimester ASC, test_name ASC',
+    );
+    return rows.map((r) => Map<String, dynamic>.from(r)).toList();
+  }
+
+  /// Mark a prenatal test as completed.
+  Future<void> completePrenatalTest(String testId) async {
+    final db = await _db;
+    await db.update(
+      'prenatal_tests',
+      {'is_completed': 1, 'completed_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [testId],
+    );
+  }
+
+  /// Insert a prenatal test record.
+  Future<void> insertPrenatalTest(Map<String, dynamic> testData) async {
+    final db = await _db;
+    await db.insert('prenatal_tests', testData,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+  // ══ Calendar Events ════════════════════════════════════════════════════════
+
+  /// Get all health events (appointments + vaccinations) for a family,
+  /// aggregated into a unified list for the shared calendar.
+  Future<List<Map<String, dynamic>>> getCalendarEventsForFamily(
+      String familyId) async {
+    final db = await _db;
+
+    // Fetch appointments
+    final apptRows = await db.rawQuery('''
+      SELECT a.id, a.member_id, m.name as member_name,
+             a.title, a.scheduled_at as event_date,
+             a.doctor, a.notes, 'appointment' as event_type
+      FROM appointments a
+      LEFT JOIN members m ON m.id = a.member_id
+      WHERE m.family_id = ?
+      ORDER BY a.scheduled_at ASC
+    ''', [familyId]);
+
+    // Fetch upcoming vaccinations not yet received
+    final vacRows = await db.rawQuery('''
+      SELECT v.id, v.member_id, m.name as member_name,
+             v.vaccine_name as title, v.due_date as event_date,
+             NULL as doctor, NULL as notes, 'vaccination' as event_type
+      FROM vaccinations v
+      LEFT JOIN members m ON m.id = v.member_id
+      WHERE m.family_id = ? AND v.is_received = 0
+      ORDER BY v.due_date ASC
+    ''', [familyId]);
+
+    final all = [
+      ...apptRows.map((r) => Map<String, dynamic>.from(r)),
+      ...vacRows.map((r) => Map<String, dynamic>.from(r)),
+    ];
+
+    // Sort combined list by event_date
+    all.sort((a, b) {
+      final da = a['event_date'] as String? ?? '';
+      final db2 = b['event_date'] as String? ?? '';
+      return da.compareTo(db2);
+    });
+
+    return all;
   }
 
   // ── Helper Methods ─────────────────────────────────────────────────────────

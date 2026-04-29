@@ -6,7 +6,7 @@ import '../main.dart';
 /// Screen for family signup/signin.
 /// First step of app authentication flow.
 class FamilyAuthScreen extends StatefulWidget {
-  const FamilyAuthScreen({Key? key}) : super(key: key);
+  const FamilyAuthScreen({super.key});
 
   @override
   State<FamilyAuthScreen> createState() => _FamilyAuthScreenState();

@@ -49,8 +49,6 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
 
       final eventRows = await _repo.getCalendarEventsForFamily(
         familyId,
-        startDate: startDate,
-        endDate: endDate,
       );
 
       // Parse and organize events
@@ -65,7 +63,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
             .firstWhere((m) => m.id == memberId, orElse: () => FamilyMember(
               name: 'Unknown',
               age: 0,
-              phone: '',
+
               profileType: ProfileType.adult,
             ))
             .name;

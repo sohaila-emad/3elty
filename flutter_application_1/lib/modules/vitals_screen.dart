@@ -169,7 +169,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                       : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _vitals.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
                       final vital = _vitals[i];
                       return Material(color: Colors.white, borderRadius: BorderRadius.circular(12), child: Padding(

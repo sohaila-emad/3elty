@@ -62,7 +62,7 @@ class _DocumentsScreenState extends State<DocumentsScreen> {
                 Expanded(
                   child: _documents.isEmpty
                       ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.folder_outlined, size: 64, color: AppColors.grey200), const SizedBox(height: 16), const Text('No documents yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.grey600))]))
-                      : ListView.separated(padding: const EdgeInsets.all(16), itemCount: _documents.length, separatorBuilder: (_, __) => const SizedBox(height: 10), itemBuilder: (_, i) {
+                      : ListView.separated(padding: const EdgeInsets.all(16), itemCount: _documents.length, separatorBuilder: (_, _) => const SizedBox(height: 10), itemBuilder: (_, i) {
                     final doc = _documents[i];
                     return Material(color: Colors.white, borderRadius: BorderRadius.circular(12), child: Padding(padding: const EdgeInsets.all(16), child: Row(children: [
                       Icon(Icons.description_rounded, size: 32, color: AppColors.teal),

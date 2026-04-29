@@ -9,10 +9,10 @@ class ProtectedRoute extends StatelessWidget {
   final RemoteAuthService _authService = RemoteAuthService.instance;
 
   ProtectedRoute({
-    Key? key,
+    super.key,
     required this.child,
     required this.requiredRole,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

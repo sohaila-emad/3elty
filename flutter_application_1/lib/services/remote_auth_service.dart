@@ -369,6 +369,7 @@ class RemoteAuthService {
       throw Exception('Sign out failed: $e');
     }
   }
+  
 
   // ─── Private Helper Methods ────────────────────────────────────────────────
 
@@ -409,6 +410,140 @@ class RemoteAuthService {
     await _secureStorage.write(key: _keyUserId, value: userId);
     await _secureStorage.write(key: _keyUserRole, value: userRole);
   }
+// ══ Member PIN & Access Methods ════════════════════════════════════════════
+
+  Future<Map<String, dynamic>?> getUserDocument(String userId) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return null;
+      return {'id': doc.id, ...doc.data() as Map<String, dynamic>};
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> setupMemberPin({
+    required String userId,
+    required String phoneNumber,
+    required String newPin,
+  }) async {
+    await _firestore.collection('users').doc(userId).update({
+      'phone': phoneNumber,
+      'pin_hash': _hashPassword(newPin),
+      'pin_set_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<bool> verifyPin(String userId, String pin) async {
+    try {
+      final doc = await _firestore.collection('users').doc(userId).get();
+      if (!doc.exists) return false;
+      final data = doc.data() as Map<String, dynamic>;
+      final storedHash = data['pin_hash'] as String?;
+      if (storedHash == null) return false;
+      return storedHash == _hashPassword(pin);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<String> signInWithPin({
+    required String phone,
+    required String pin,
+  }) async {
+    final query = await _firestore
+        .collection('users')
+        .where('phone', isEqualTo: phone.trim())
+        .limit(1)
+        .get();
+    if (query.docs.isEmpty) throw Exception('No account found for this phone number.');
+    final userDoc = query.docs.first;
+    final data = userDoc.data();
+    final userId = userDoc.id;
+    final familyId = data['family_id'] as String?;
+    if (familyId == null) throw Exception('Account not linked to a family.');
+    final lockedUntil = data['locked_until'] is String ? data['locked_until'] as String : null;
+    if (lockedUntil != null) {
+      final lockTime = DateTime.tryParse(lockedUntil);
+      if (lockTime != null && DateTime.now().isBefore(lockTime)) {
+        throw Exception('Account locked. Try again later.');
+      }
+    }
+    final storedHash = data['pin_hash'] as String?;
+    if (storedHash == null) throw Exception('PIN not set up for this account.');
+    final failedAttempts = data['failed_attempts'] as int? ?? 0;
+    if (storedHash != _hashPassword(pin)) {
+      final newAttempts = failedAttempts + 1;
+      final updateData = <String, dynamic>{'failed_attempts': newAttempts};
+      if (newAttempts >= 5) {
+        updateData['locked_until'] = DateTime.now().add(const Duration(minutes: 30)).toIso8601String();
+      }
+      await _firestore.collection('users').doc(userId).update(updateData);
+      final remaining = 5 - newAttempts;
+      throw Exception(remaining > 0 ? 'Invalid PIN. Attempts remaining: $remaining' : 'Account locked for 30 minutes.');
+    }
+    // CORRECT
+    await _firestore.collection('users').doc(userId).update({
+      'failed_attempts': 0,
+      'locked_until': FieldValue.delete(),  // properly removes the field
+      'last_login': FieldValue.serverTimestamp(),
+    });
+    final token = _generateToken(userId, familyId, 'member');
+    await _storeTokens(token, familyId, userId, 'member');
+    return familyId;
+  }
+
+  Future<void> setupMemberCredentials({
+    required String memberId,
+    required String phone,
+    required String pin,
+  }) async {
+    await _firestore.collection('users').doc(memberId).update({
+      'phone': phone.trim(),
+      'pin_hash': _hashPassword(pin),
+      'is_active': true,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> recordFailedAttempt(String userId, String familyId, String attemptType) async {
+    await _firestore.collection('access_log').add({
+      'user_id': userId,
+      'family_id': familyId,
+      'event': 'failed_$attemptType',
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<void> recordAccessSession({
+    required String accessorId,
+    required String targetMemberId,
+    required String familyId,
+    required String accessType,
+  }) async {
+    await _firestore.collection('access_log').add({
+      'user_id': accessorId,
+      'target_member_id': targetMemberId,
+      'family_id': familyId,
+      'event': accessType,
+      'timestamp': FieldValue.serverTimestamp(),
+    });
+  }
+
+  Future<List<Map<String, dynamic>>> getMemberAccessHistory(String memberId) async {
+    try {
+      final snapshot = await _firestore
+          .collection('access_log')
+          .where('target_member_id', isEqualTo: memberId)
+          .orderBy('timestamp', descending: true)
+          .limit(50)
+          .get();
+      return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+    } catch (e) {
+      return [];
+    }
+  }
 }
 
 // Helper function for base64 encoding
@@ -416,31 +551,18 @@ String base64Encode(List<int> bytes) {
   const String _base64Alphabet =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   final StringBuffer result = StringBuffer();
-
   for (int i = 0; i < bytes.length; i += 3) {
     final int b1 = bytes[i];
     final int? b2 = i + 1 < bytes.length ? bytes[i + 1] : null;
     final int? b3 = i + 2 < bytes.length ? bytes[i + 2] : null;
-
     final int byte1 = (b1 >> 2) & 0x3F;
     final int byte2 = (((b1 & 0x03) << 4) | (b2 != null ? (b2 >> 4) : 0)) & 0x3F;
-    final int byte3 =
-        b2 != null ? (((b2 & 0x0F) << 2) | (b3 != null ? (b3 >> 6) : 0)) & 0x3F : 64;
+    final int byte3 = b2 != null ? (((b2 & 0x0F) << 2) | (b3 != null ? (b3 >> 6) : 0)) & 0x3F : 64;
     final int byte4 = b3 != null ? (b3 & 0x3F) : 64;
-
     result.write(_base64Alphabet[byte1]);
     result.write(_base64Alphabet[byte2]);
-    if (byte3 < 64) {
-      result.write(_base64Alphabet[byte3]);
-    } else {
-      result.write('=');
-    }
-    if (byte4 < 64) {
-      result.write(_base64Alphabet[byte4]);
-    } else {
-      result.write('=');
-    }
+    if (byte3 < 64) { result.write(_base64Alphabet[byte3]); } else { result.write('='); }
+    if (byte4 < 64) { result.write(_base64Alphabet[byte4]); } else { result.write('='); }
   }
-
   return result.toString();
 }

@@ -219,7 +219,7 @@ class _SecurityAuditScreenState extends State<SecurityAuditScreen> {
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       itemCount: _accessHistory.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
                       itemBuilder: (_, i) {
                         final access = _accessHistory[i];
                         final accessedAt =

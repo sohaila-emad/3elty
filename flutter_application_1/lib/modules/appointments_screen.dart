@@ -156,7 +156,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _appointments.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
                       final appt = _appointments[i];
                       return Material(color: Colors.white, borderRadius: BorderRadius.circular(12), child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

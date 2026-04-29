@@ -28,7 +28,6 @@ import 'auth_service.dart';
 import 'services/remote_auth_service.dart';
 import 'main.dart';
 import 'data/app_repository.dart';
-import 'utils/validators.dart';
 import 'utils/error_handler.dart';
 
 // ─── Persistent FamilyDashboard ───────────────────────────────────────────────
@@ -316,7 +315,7 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   Widget _memberList() => ListView.separated(
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
     itemCount: _members.length,
-    separatorBuilder: (_, __) => const SizedBox(height: 10),
+    separatorBuilder: (_, _) => const SizedBox(height: 10),
     itemBuilder: (_, i) {
       final member = _members[i];
       return _MemberCard(
