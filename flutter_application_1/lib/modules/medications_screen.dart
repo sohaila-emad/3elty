@@ -18,6 +18,9 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
   List<dynamic> _medications = [];
   bool _loading = true;
 
+  // Arabic time of day labels
+  static const List<String> _timeOptions = ['الصباح', 'الظهر', 'المساء', 'الليل'];
+
   @override
   void initState() {
     super.initState();
@@ -40,7 +43,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showError('Failed to load medications: $e');
+      _showError('تعذّر تحميل الأدوية: $e');
     }
   }
 
@@ -48,7 +51,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
     final nameCtrl = TextEditingController();
     final doseCtrl = TextEditingController();
     final freqCtrl = TextEditingController();
-    String selectedTime = 'Morning';
+    String selectedTime = 'الصباح';
 
     showModalBottomSheet(
       context: context,
@@ -57,100 +60,111 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          20,
-          24,
-          MediaQuery.of(ctx).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.grey200,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            20,
+            24,
+            MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.grey200,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            const Text('Add medication',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            TextField(
-              controller: nameCtrl,
-              decoration: _buildInputDecoration('Medication name', 'e.g. Aspirin'),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: doseCtrl,
-              decoration: _buildInputDecoration('Dose', 'e.g. 500mg'),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: freqCtrl,
-              decoration: _buildInputDecoration('Frequency', 'e.g. Twice daily'),
-            ),
-            const SizedBox(height: 14),
-            const Text('Time of day',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.grey600)),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              children: ['Morning', 'Afternoon', 'Evening', 'Night'].map((time) {
-                return FilterChip(
-                  label: Text(time),
-                  selected: selectedTime == time,
-                  onSelected: (_) {
-                    setState(() => selectedTime = time);
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (nameCtrl.text.isEmpty || doseCtrl.text.isEmpty || freqCtrl.text.isEmpty) {
-                    _showError('Please fill all fields');
-                    return;
-                  }
-                  if (widget.member.id == null) {
-                    _showError('Member not saved yet');
-                    return;
-                  }
-                  try {
-                    final familyId = await _authService.familyId;
-                    if (familyId == null) {
-                      _showError('Family not found. Please sign in again.');
+              const SizedBox(height: 20),
+              const Text('إضافة دواء',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              TextField(
+                controller: nameCtrl,
+                decoration: _buildInputDecoration('اسم الدواء', 'مثال: أسبرين'),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: doseCtrl,
+                decoration: _buildInputDecoration('الجرعة', 'مثال: ٥٠٠ مجم'),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: freqCtrl,
+                decoration: _buildInputDecoration('التكرار', 'مثال: مرتين يومياً'),
+              ),
+              const SizedBox(height: 14),
+              const Text('وقت الجرعة',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.grey600)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                children: _timeOptions.map((time) {
+                  return FilterChip(
+                    label: Text(time),
+                    selected: selectedTime == time,
+                    onSelected: (_) {
+                      setModalState(() => selectedTime = time);
+                    },
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    if (nameCtrl.text.isEmpty || doseCtrl.text.isEmpty || freqCtrl.text.isEmpty) {
+                      _showError('يرجى ملء جميع الحقول');
                       return;
                     }
-                    await _repo.insertMedication(MedicationRecord(
-                      familyId: familyId,
-                      memberId: widget.member.id!,
-                      name: nameCtrl.text.trim(),
-                      dose: doseCtrl.text.trim(),
-                      frequency: freqCtrl.text.trim(),
-                      timeOfDay: selectedTime,
-                    ));
-                    if (!mounted) return;
-                    Navigator.pop(ctx);
-                    _loadMedications();
-                    _showSuccess('${nameCtrl.text} added');
-                  } catch (e) {
-                    _showError('Failed to add medication: $e');
-                  }
-                },
-                child: const Text('Add medication'),
+                    if (widget.member.id == null) {
+                      _showError('لم يُحفظ الفرد بعد');
+                      return;
+                    }
+                    final navigator = Navigator.of(ctx);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final addedName = nameCtrl.text;
+                    try {
+                      final familyId = await _authService.familyId;
+                      if (!mounted) return;
+                      if (familyId == null) {
+                        _showError('لم يتم العثور على العائلة. يرجى تسجيل الدخول مجدداً.');
+                        return;
+                      }
+                      await _repo.insertMedication(MedicationRecord(
+                        familyId: familyId,
+                        memberId: widget.member.id!,
+                        name: nameCtrl.text.trim(),
+                        dose: doseCtrl.text.trim(),
+                        frequency: freqCtrl.text.trim(),
+                        timeOfDay: selectedTime,
+                      ));
+                      if (!mounted) return;
+                      navigator.pop();
+                      _loadMedications();
+                      messenger.showSnackBar(SnackBar(
+                        backgroundColor: AppColors.green,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        content: Text('تمت إضافة $addedName', style: const TextStyle(color: Colors.white)),
+                      ));
+                    } catch (e) {
+                      _showError('تعذّر إضافة الدواء: $e');
+                    }
+                  },
+                  child: const Text('إضافة الدواء'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -199,14 +213,13 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
     return Scaffold(
       backgroundColor: AppColors.grey50,
       appBar: AppBar(
-        title: const Text('Medications'),
+        title: const Text('الأدوية'),
         centerTitle: false,
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : Column(
               children: [
-                // Member info banner
                 Container(
                   color: Colors.white,
                   padding: const EdgeInsets.all(16),
@@ -249,7 +262,6 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                   ),
                 ),
                 const Divider(height: 1),
-                // Medications list
                 Expanded(
                   child: _medications.isEmpty
                       ? Center(
@@ -263,7 +275,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                               ),
                               const SizedBox(height: 16),
                               const Text(
-                                'No medications yet',
+                                'لا توجد أدوية بعد',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
@@ -272,7 +284,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                               ),
                               const SizedBox(height: 8),
                               const Text(
-                                'Add a medication to get started',
+                                'أضف دواءً للبدء',
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: AppColors.grey600,
@@ -284,7 +296,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: _medications.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
                           itemBuilder: (_, i) {
                             final med = _medications[i];
                             return Material(
@@ -296,12 +308,12 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                                   final confirm = await showDialog<bool>(
                                     context: context,
                                     builder: (ctx) => AlertDialog(
-                                      title: const Text('Delete medication?'),
-                                      content: Text('Remove ${med.name}?'),
+                                      title: const Text('حذف الدواء؟'),
+                                      content: Text('هل تريد حذف ${med.name}؟'),
                                       actions: [
                                         TextButton(
                                           onPressed: () => Navigator.pop(ctx, false),
-                                          child: const Text('Cancel'),
+                                          child: const Text('إلغاء'),
                                         ),
                                         ElevatedButton(
                                           style: ElevatedButton.styleFrom(
@@ -309,7 +321,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                                           ),
                                           onPressed: () => Navigator.pop(ctx, true),
                                           child: const Text(
-                                            'Delete',
+                                            'حذف',
                                             style: TextStyle(color: Colors.white),
                                           ),
                                         ),
@@ -319,10 +331,11 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                                   if (confirm == true && med.id != null) {
                                     try {
                                       await _repo.deleteMedication(med.id);
+                                      if (!mounted) return;
                                       _loadMedications();
-                                      _showSuccess('Medication deleted');
+                                      _showSuccess('تم حذف الدواء');
                                     } catch (e) {
-                                      _showError('Failed to delete: $e');
+                                      _showError('تعذّر الحذف: $e');
                                     }
                                   }
                                 },
@@ -378,7 +391,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Every ${med.frequency}',
+                                        'كل ${med.frequency}',
                                         style: const TextStyle(
                                           fontSize: 13,
                                           color: AppColors.grey600,
@@ -399,7 +412,7 @@ class _MedicationsScreenState extends State<MedicationsScreen> {
         backgroundColor: AppColors.teal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Add medication'),
+        label: const Text('إضافة دواء'),
       ),
     );
   }

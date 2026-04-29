@@ -413,7 +413,7 @@ class RemoteAuthService {
 
 // Helper function for base64 encoding
 String base64Encode(List<int> bytes) {
-  const String _base64Alphabet =
+  const String base64Alphabet =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
   final StringBuffer result = StringBuffer();
 
@@ -428,15 +428,15 @@ String base64Encode(List<int> bytes) {
         b2 != null ? (((b2 & 0x0F) << 2) | (b3 != null ? (b3 >> 6) : 0)) & 0x3F : 64;
     final int byte4 = b3 != null ? (b3 & 0x3F) : 64;
 
-    result.write(_base64Alphabet[byte1]);
-    result.write(_base64Alphabet[byte2]);
+    result.write(base64Alphabet[byte1]);
+    result.write(base64Alphabet[byte2]);
     if (byte3 < 64) {
-      result.write(_base64Alphabet[byte3]);
+      result.write(base64Alphabet[byte3]);
     } else {
       result.write('=');
     }
     if (byte4 < 64) {
-      result.write(_base64Alphabet[byte4]);
+      result.write(base64Alphabet[byte4]);
     } else {
       result.write('=');
     }

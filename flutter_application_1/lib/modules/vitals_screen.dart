@@ -18,6 +18,14 @@ class _VitalsScreenState extends State<VitalsScreen> {
   List<dynamic> _vitals = [];
   bool _loading = true;
 
+  static const List<String> _vitalTypes = [
+    'ضغط الدم (الانقباضي)',
+    'ضغط الدم (الانبساطي)',
+    'سكر الدم',
+    'معدل ضربات القلب',
+    'درجة الحرارة',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -40,13 +48,13 @@ class _VitalsScreenState extends State<VitalsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _showError('Failed to load vitals: $e');
+      _showError('تعذّر تحميل العلامات الحيوية: $e');
     }
   }
 
   Future<void> _showAddVitalDialog() async {
     final valueCtrl = TextEditingController();
-    String selectedType = 'Blood Pressure (Systolic)';
+    String selectedType = _vitalTypes[0];
     String selectedUnit = 'mmHg';
 
     showModalBottomSheet(
@@ -56,71 +64,107 @@ class _VitalsScreenState extends State<VitalsScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(2))),
-            ),
-            const SizedBox(height: 20),
-            const Text('Log vital sign', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 20),
-            const Text('Type', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.grey600)),
-            DropdownButton<String>(
-              value: selectedType,
-              isExpanded: true,
-              items: [
-                'Blood Pressure (Systolic)',
-                'Blood Pressure (Diastolic)',
-                'Blood Sugar',
-                'Heart Rate',
-                'Temperature',
-              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) => setState(() => selectedType = v ?? selectedType),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: valueCtrl,
-              keyboardType: TextInputType.number,
-              decoration: _buildInputDecoration('Value', 'e.g. 120'),
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () async {
-                  if (valueCtrl.text.isEmpty || widget.member.id == null) {
-                    _showError('Invalid input or member');
-                    return;
-                  }
-                  try {
-                    final familyId = await _authService.familyId;
-                    if (familyId == null) {
-                      _showError('Family not found. Please sign in again.');
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(24, 20, 24, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.grey200, borderRadius: BorderRadius.circular(2))),
+              ),
+              const SizedBox(height: 20),
+              const Text('تسجيل علامة حيوية', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 20),
+              const Text('النوع', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.grey600)),
+              DropdownButton<String>(
+                value: selectedType,
+                isExpanded: true,
+                items: _vitalTypes.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                onChanged: (v) => setModalState(() => selectedType = v ?? selectedType),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: valueCtrl,
+                keyboardType: TextInputType.number,
+                decoration: _buildInputDecoration('القيمة', 'مثال: ١٢٠'),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final double? val = double.tryParse(valueCtrl.text);
+                    
+                    if (val == null || widget.member.id == null) {
+                      _showError('يرجى إدخال رقم صحيح');
                       return;
                     }
-                    await _repo.insertVital(VitalRecord(
-                      familyId: familyId,
-                      memberId: widget.member.id!,
-                      type: selectedType,
-                      value: double.parse(valueCtrl.text),
-                      unit: selectedUnit,
-                    ));
-                    if (!mounted) return;
-                    Navigator.pop(ctx);
-                    _loadVitals();
-                    _showSuccess('Vital recorded');
-                  } catch (e) {
-                    _showError('Failed: $e');
-                  }
-                },
-                child: const Text('Log vital'),
+
+                    // 1. منطق الرفض (Unreasonable Values) - أرقام مستحيلة فيزيائياً
+                    if (selectedType == 'درجة الحرارة' && (val > 45 || val < 32)) {
+                      _showError('درجة حرارة غير منطقية! يرجى التأكد.');
+                      return;
+                    }
+                    if (selectedType == 'سكر الدم' && (val > 600 || val < 20)) {
+                      _showError('قيمة سكر غير معقولة طبياً!');
+                      return;
+                    }
+                    if (selectedType.contains('ضغط الدم') && (val > 260 || val < 40)) {
+                      _showError('قيمة ضغط دم مستحيلة!');
+                      return;
+                    }
+
+                    // 2. منطق التنبيه (Normal Range Alerts) - أرقام تحتاج انتباه
+                    String? warning;
+                    if (selectedType == 'درجة الحرارة' && val >= 38) {
+                      warning = 'انتباه: درجة الحرارة مرتفعة (حمى)!';
+                    } else if (selectedType == 'ضغط الدم (الانقباضي)' && val > 140) {
+                      warning = 'انتباه: ضغط الدم الانقباضي مرتفع.';
+                    } else if (selectedType == 'سكر الدم' && (val > 180 || val < 70)) {
+                      warning = 'انتباه: مستوى السكر خارج النطاق الطبيعي.';
+                    }
+
+                    final navigator = Navigator.of(ctx);
+                    final messenger = ScaffoldMessenger.of(context);
+                    
+                    try {
+                      final familyId = await _authService.familyId;
+                      if (!mounted) return;
+                      if (familyId == null) {
+                        _showError('لم يتم العثور على العائلة.');
+                        return;
+                      }
+
+                      await _repo.insertVital(VitalRecord(
+                        familyId: familyId,
+                        memberId: widget.member.id!,
+                        type: selectedType,
+                        value: val,
+                        unit: selectedUnit,
+                      ));
+
+                      if (!mounted) return;
+                      navigator.pop();
+                      _loadVitals();
+
+                      // إظهار تنبيه لو الرقم غير طبيعي، أو رسالة نجاح عادية
+                      messenger.showSnackBar(SnackBar(
+                        backgroundColor: warning != null ? AppColors.orange : AppColors.green,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        content: Text(warning ?? 'تم تسجيل العلامة الحيوية بنجاح'),
+                      ));
+                    } catch (e) {
+                      _showError('فشل الحفظ: $e');
+                    }
+                  },
+                  child: const Text('تسجيل'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -145,7 +189,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
     final t = widget.member.profileType;
     return Scaffold(
       backgroundColor: AppColors.grey50,
-      appBar: AppBar(title: const Text('Vital Signs')),
+      appBar: AppBar(title: const Text('العلامات الحيوية')),
       body: _loading
           ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : Column(
@@ -164,12 +208,12 @@ class _VitalsScreenState extends State<VitalsScreen> {
                       ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                     Icon(Icons.favorite_rounded, size: 64, color: AppColors.grey200),
                     const SizedBox(height: 16),
-                    const Text('No vitals logged yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.grey600)),
+                    const Text('لا توجد علامات حيوية بعد', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.grey600)),
                   ]))
                       : ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: _vitals.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (_, i) {
                       final vital = _vitals[i];
                       return Material(color: Colors.white, borderRadius: BorderRadius.circular(12), child: Padding(
@@ -180,7 +224,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                             Text('${vital.value} ${vital.unit}', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.orange)),
                           ]),
                           const SizedBox(height: 8),
-                          Text(vital.recordedAt ?? 'Just now', style: const TextStyle(fontSize: 13, color: AppColors.grey600)),
+                          Text(vital.recordedAt ?? 'الآن', style: const TextStyle(fontSize: 13, color: AppColors.grey600)),
                         ]),
                       ));
                     },
@@ -188,7 +232,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
                 ),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(onPressed: _showAddVitalDialog, backgroundColor: AppColors.teal, foregroundColor: Colors.white, icon: const Icon(Icons.add_rounded), label: const Text('Log vital')),
+      floatingActionButton: FloatingActionButton.extended(onPressed: _showAddVitalDialog, backgroundColor: AppColors.teal, foregroundColor: Colors.white, icon: const Icon(Icons.add_rounded), label: const Text('تسجيل علامة')),
     );
   }
 }

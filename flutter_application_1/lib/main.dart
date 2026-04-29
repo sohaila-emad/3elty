@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
-
+import 'modules/food_safety_screen.dart';
+import 'modules/pregnancy_medications_screen.dart';
+import 'modules/ultrasound_log_screen.dart';
 import 'services/remote_auth_service.dart';
 import 'screens/family_auth_screen.dart';
 import 'screens/admin_member_management_screen.dart';
@@ -14,6 +17,7 @@ import 'modules/appointments_screen.dart';
 import 'modules/documents_screen.dart';
 import 'modules/vaccinations_screen.dart';
 import 'modules/growth_tracking_screen.dart';
+
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 class AppColors {
@@ -42,11 +46,11 @@ enum ProfileType { child, elderly, pregnant, chronic, adult }
 extension ProfileTypeX on ProfileType {
   String get label {
     switch (this) {
-      case ProfileType.child:    return 'Child';
-      case ProfileType.elderly:  return 'Elderly';
-      case ProfileType.pregnant: return 'Pregnant';
-      case ProfileType.chronic:  return 'Chronic';
-      case ProfileType.adult:    return 'Adult';
+      case ProfileType.child:    return 'طفل';
+      case ProfileType.elderly:  return 'كبير سن';
+      case ProfileType.pregnant: return 'حامل';
+      case ProfileType.chronic:  return 'مريض مزمن';
+      case ProfileType.adult:    return 'بالغ';
     }
   }
 
@@ -83,7 +87,7 @@ extension ProfileTypeX on ProfileType {
 
 // ─── DATA MODELS ─────────────────────────────────────────────────────────────
 class FamilyMember {
-  final String? id;  // null until saved to DB (Firebase document ID)
+  final String? id;
   final String name;
   final int age;
   final ProfileType profileType;
@@ -94,7 +98,6 @@ class FamilyMember {
     required this.profileType,
   });
 
-  /// Convert DB record → UI model
   factory FamilyMember.fromRecord(dynamic r) => FamilyMember(
     id:          r.id as String?,
     name:        r.name,
@@ -114,7 +117,7 @@ class HealthModule {
   final IconData icon;
   final Color color;
   final Color bgColor;
-  final String? badge; // e.g. "2 due", "Missed today"
+  final String? badge;
   final Color? badgeColor;
 
   const HealthModule({
@@ -136,34 +139,34 @@ List<HealthModule> modulesFor(ProfileType type) {
       return const [
         HealthModule(
           id: 'vaccines',
-          title: 'Vaccination Schedule',
-          subtitle: "Egypt MOH calendar with digital booklet",
+          title: 'جدول التطعيمات',
+          subtitle: 'تقويم وزارة الصحة مع الدفتر الرقمي',
           icon: Icons.vaccines_rounded,
           color: Color(0xFF1565C0),
           bgColor: Color(0xFFE3F2FD),
-          badge: '2 due soon',
+          badge: 'موعدان قريباً',
           badgeColor: Color(0xFFE65100),
         ),
         HealthModule(
           id: 'growth',
-          title: 'Growth Tracking',
-          subtitle: 'Weight & height vs WHO percentiles',
+          title: 'تتبع النمو',
+          subtitle: 'الوزن والطول مقارنةً بمعايير منظمة الصحة',
           icon: Icons.show_chart_rounded,
           color: Color(0xFF1565C0),
           bgColor: Color(0xFFE3F2FD),
         ),
         HealthModule(
           id: 'appointments',
-          title: 'Appointments',
-          subtitle: 'Pediatric visits & reminders',
+          title: 'المواعيد',
+          subtitle: 'زيارات طبيب الأطفال والتذكيرات',
           icon: Icons.calendar_month_rounded,
           color: Color(0xFF1565C0),
           bgColor: Color(0xFFE3F2FD),
         ),
         HealthModule(
           id: 'records',
-          title: 'Medical Records',
-          subtitle: 'Lab results, prescriptions & profile',
+          title: 'السجلات الطبية',
+          subtitle: 'نتائج التحاليل والوصفات والملف الشخصي',
           icon: Icons.folder_special_rounded,
           color: Color(0xFF1565C0),
           bgColor: Color(0xFFE3F2FD),
@@ -174,34 +177,34 @@ List<HealthModule> modulesFor(ProfileType type) {
       return const [
         HealthModule(
           id: 'medications',
-          title: 'Medication Confirmation',
-          subtitle: 'One-tap daily dose tracking',
+          title: 'تأكيد الدواء',
+          subtitle: 'تتبع الجرعة اليومية بنقرة واحدة',
           icon: Icons.medication_rounded,
           color: Color(0xFF6A1B9A),
           bgColor: Color(0xFFF3E5F5),
-          badge: 'Missed today',
+          badge: 'فاتتك اليوم',
           badgeColor: AppColors.red,
         ),
         HealthModule(
           id: 'vitals',
-          title: 'Vital Signs',
-          subtitle: 'Blood pressure, glucose & more',
+          title: 'العلامات الحيوية',
+          subtitle: 'ضغط الدم والسكر والمزيد',
           icon: Icons.favorite_rounded,
           color: Color(0xFF6A1B9A),
           bgColor: Color(0xFFF3E5F5),
         ),
         HealthModule(
           id: 'appointments',
-          title: 'Appointments',
-          subtitle: 'Doctor visits & follow-ups',
+          title: 'المواعيد',
+          subtitle: 'زيارات الأطباء والمتابعات',
           icon: Icons.calendar_month_rounded,
           color: Color(0xFF6A1B9A),
           bgColor: Color(0xFFF3E5F5),
         ),
         HealthModule(
           id: 'records',
-          title: 'Medical Records',
-          subtitle: 'Profile, conditions & documents',
+          title: 'السجلات الطبية',
+          subtitle: 'الملف الشخصي والحالات والوثائق',
           icon: Icons.folder_special_rounded,
           color: Color(0xFF6A1B9A),
           bgColor: Color(0xFFF3E5F5),
@@ -212,88 +215,96 @@ List<HealthModule> modulesFor(ProfileType type) {
       return const [
         HealthModule(
           id: 'prenatal_tests',
-          title: 'Prenatal Tests',
-          subtitle: 'Trimester checklist with reminders',
+          title: 'فحوصات ما قبل الولادة',
+          subtitle: 'قائمة التحقق الثلاثية مع التذكيرات',
           icon: Icons.science_rounded,
           color: Color(0xFFAD1457),
           bgColor: Color(0xFFFCE4EC),
-          badge: 'Week 28 due',
+          badge: 'الأسبوع 28',
           badgeColor: Color(0xFFE65100),
         ),
         HealthModule(
           id: 'medications',
-          title: 'Prenatal Medications',
-          subtitle: 'Folic acid, iron, calcium tracking',
+          title: 'أدوية الحمل',
+          subtitle: 'تتبع حمض الفوليك والحديد والكالسيوم',
           icon: Icons.medication_rounded,
           color: Color(0xFFAD1457),
           bgColor: Color(0xFFFCE4EC),
         ),
         HealthModule(
           id: 'food_safety',
-          title: 'Food Safety Guide',
-          subtitle: 'Safe & unsafe local Egyptian dishes',
+          title: 'دليل الأغذية الآمنة',
+          subtitle: 'الأطعمة المصرية الآمنة وغير الآمنة',
           icon: Icons.restaurant_rounded,
           color: Color(0xFFAD1457),
           bgColor: Color(0xFFFCE4EC),
         ),
         HealthModule(
           id: 'appointments',
-          title: 'Appointments',
-          subtitle: 'OB/GYN visits & ultrasounds',
+          title: 'المواعيد',
+          subtitle: 'زيارات طبيب النساء والسونار',
           icon: Icons.calendar_month_rounded,
           color: Color(0xFFAD1457),
           bgColor: Color(0xFFFCE4EC),
         ),
         HealthModule(
           id: 'records',
-          title: 'Medical Records',
-          subtitle: 'Pregnancy docs & test results',
+          title: 'السجلات الطبية',
+          subtitle: 'وثائق الحمل ونتائج التحاليل',
           icon: Icons.folder_special_rounded,
           color: Color(0xFFAD1457),
           bgColor: Color(0xFFFCE4EC),
         ),
+        HealthModule(
+          id: 'vitals', // نفس الـ ID اللي ضفناه في الـ switch
+          title: 'العلامات الحيوية',
+          subtitle: 'تتبع الضغط والسكر والوزن أثناء الحمل',
+          icon: Icons.favorite_rounded,
+          color: Color(0xFFAD1457),
+          bgColor: Color(0xFFFCE4EC),
+    ),
       ];
 
     case ProfileType.chronic:
       return const [
         HealthModule(
           id: 'vitals',
-          title: 'Vital Signs Logger',
-          subtitle: 'Blood sugar, blood pressure & trends',
+          title: 'تسجيل العلامات الحيوية',
+          subtitle: 'سكر الدم وضغط الدم والاتجاهات',
           icon: Icons.monitor_heart_rounded,
           color: Color(0xFFBF360C),
           bgColor: Color(0xFFFBE9E7),
-          badge: 'Log today',
+          badge: 'سجّل اليوم',
           badgeColor: AppColors.orange,
         ),
         HealthModule(
           id: 'medications',
-          title: 'Medication Adherence',
-          subtitle: 'Daily dose tracker & missed-dose alerts',
+          title: 'الالتزام بالدواء',
+          subtitle: 'تتبع الجرعة اليومية وتنبيهات الجرعات الفائتة',
           icon: Icons.medication_rounded,
           color: Color(0xFFBF360C),
           bgColor: Color(0xFFFBE9E7),
         ),
         HealthModule(
           id: 'monthly_report',
-          title: 'Monthly Clinical Summary',
-          subtitle: 'Auto-generated PDF for doctor visits',
+          title: 'الملخص السريري الشهري',
+          subtitle: 'PDF تلقائي لزيارات الطبيب',
           icon: Icons.summarize_rounded,
           color: Color(0xFFBF360C),
           bgColor: Color(0xFFFBE9E7),
         ),
         HealthModule(
           id: 'appointments',
-          title: 'Appointments',
-          subtitle: 'Specialist follow-ups & lab tests',
+          title: 'المواعيد',
+          subtitle: 'متابعات الأخصائيين وتحاليل المختبر',
           icon: Icons.calendar_month_rounded,
           color: Color(0xFFBF360C),
           bgColor: Color(0xFFFBE9E7),
         ),
         HealthModule(
           id: 'records',
-          title: 'Medical Records',
-          subtitle: 'Conditions, allergies & lab results',
+          title: 'السجلات الطبية',
+          subtitle: 'الحالات والحساسية ونتائج التحاليل',
           icon: Icons.folder_special_rounded,
           color: Color(0xFFBF360C),
           bgColor: Color(0xFFFBE9E7),
@@ -304,24 +315,24 @@ List<HealthModule> modulesFor(ProfileType type) {
       return const [
         HealthModule(
           id: 'appointments',
-          title: 'Appointments',
-          subtitle: 'Schedule & track doctor visits',
+          title: 'المواعيد',
+          subtitle: 'جدولة زيارات الأطباء وتتبعها',
           icon: Icons.calendar_month_rounded,
           color: AppColors.teal,
           bgColor: AppColors.tealLight,
         ),
         HealthModule(
           id: 'medications',
-          title: 'Medications',
-          subtitle: 'Track prescriptions & doses',
+          title: 'الأدوية',
+          subtitle: 'تتبع الوصفات والجرعات',
           icon: Icons.medication_rounded,
           color: AppColors.teal,
           bgColor: AppColors.tealLight,
         ),
         HealthModule(
           id: 'records',
-          title: 'Medical Records',
-          subtitle: 'Profile, documents & history',
+          title: 'السجلات الطبية',
+          subtitle: 'الملف الشخصي والوثائق والتاريخ المرضي',
           icon: Icons.folder_special_rounded,
           color: AppColors.teal,
           bgColor: AppColors.tealLight,
@@ -334,13 +345,12 @@ List<HealthModule> modulesFor(ProfileType type) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   } catch (e) {
-    print('Firebase initialization error: $e');
+    debugPrint('Firebase initialization error: $e');
   }
 
   runApp(const E3ltyApp());
@@ -353,11 +363,25 @@ class E3ltyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: '3elty',
+      title: 'عيلتي',
+      locale: const Locale('ar', 'EG'),
+      supportedLocales: const [Locale('ar', 'EG')],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      builder: (context, child) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: child!,
+        );
+      },
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: AppColors.teal,
         scaffoldBackgroundColor: AppColors.grey50,
+        fontFamily: 'Roboto',
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: Colors.white,
@@ -475,7 +499,6 @@ class MemberProfileScreen extends StatelessWidget {
       backgroundColor: AppColors.grey50,
       body: CustomScrollView(
         slivers: [
-          // ── Collapsible hero header ────────────────────────────────────────
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
@@ -488,11 +511,10 @@ class MemberProfileScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
-              // Edit member button (placeholder)
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
                 onPressed: () {},
-                tooltip: 'Edit profile',
+                tooltip: 'تعديل الملف',
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -501,7 +523,6 @@ class MemberProfileScreen extends StatelessWidget {
             ),
           ),
 
-          // ── Panic button for elderly (always on top) ───────────────────────
           if (t == ProfileType.elderly)
             SliverToBoxAdapter(
               child: Padding(
@@ -510,7 +531,6 @@ class MemberProfileScreen extends StatelessWidget {
               ),
             ),
 
-          // ── Quick stats strip ─────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -518,12 +538,11 @@ class MemberProfileScreen extends StatelessWidget {
             ),
           ),
 
-          // ── Section header ─────────────────────────────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
               child: Text(
-                '${t.label} Health Modules',
+                'وحدات صحة ${t.label}',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w700,
@@ -533,7 +552,6 @@ class MemberProfileScreen extends StatelessWidget {
             ),
           ),
 
-          // ── Module grid ───────────────────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
             sliver: SliverGrid(
@@ -548,7 +566,7 @@ class MemberProfileScreen extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 1.05,
+                childAspectRatio: 0.85
               ),
             ),
           ),
@@ -558,50 +576,53 @@ class MemberProfileScreen extends StatelessWidget {
   }
 
   void _onModuleTap(BuildContext context, HealthModule module) {
-    Widget screen;
-    
-    switch (module.id) {
-      case 'medications':
-        screen = MedicationsScreen(member: member);
-        break;
-      case 'vitals':
-        screen = VitalsScreen(member: member);
-        break;
-      case 'appointments':
-        screen = AppointmentsScreen(member: member);
-        break;
-      case 'records':
-        screen = DocumentsScreen(member: member);
-        break;
-      case 'vaccines':
-        screen = VaccinationsScreen(member: member);
-        break;
-      case 'growth':
-        screen = GrowthTrackingScreen(member: member);
-        break;
-      case 'prenatal_tests':
-      case 'food_safety':
-      case 'monthly_report':
-      default:
-        // Coming soon modules — show placeholder
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: module.color,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 2),
-            content: Row(children: [
-              Icon(module.icon, color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              const Text('Coming soon…', style: TextStyle(color: Colors.white)),
-            ]),
-          ),
-        );
-        return;
+      Widget screen;
+      
+      switch (module.id) {
+        case 'medications':
+          // هنا بنفتح الشاشة المخصصة للحوامل اللي إنتِ تعبتي فيها
+          if (member.profileType == ProfileType.pregnant) {
+            screen = PregnancyMedicationsScreen(member: member);
+          } else {
+            screen = MedicationsScreen(member: member);
+          }
+          break;
+
+        case 'food_safety':
+          screen = const FoodSafetyScreen();
+          break;
+
+        case 'prenatal_tests':
+          screen = UltrasoundLogScreen(member: member);
+          break;
+
+        // ... باقي الحالات (vitals, growth, etc.)
+        case 'vitals':
+          screen = VitalsScreen(member: member);
+          break;
+        case 'appointments':
+          screen = AppointmentsScreen(member: member);
+          break;
+        case 'records':
+          screen = DocumentsScreen(member: member);
+          break;
+        case 'vaccines':
+          screen = VaccinationsScreen(member: member);
+          break;
+        case 'growth':
+          screen = GrowthTrackingScreen(member: member);
+          break;
+
+        default:
+          // لو مفيش شاشة مربوطة هيطلع SnackBar
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('قريباً…')),
+          );
+          return;
+      }
+      
+      Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     }
-    
-    Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
-  }
 }
 
 // ─── Profile hero header widget ───────────────────────────────────────────────
@@ -618,14 +639,13 @@ class _ProfileHeroHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Avatar
           Container(
             width: 72,
             height: 72,
             decoration: BoxDecoration(
               color: t.bgColor,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: t.color.withOpacity(0.25), width: 2),
+              border: Border.all(color: t.color.withValues(alpha: 0.25), width: 2),
             ),
             child: Icon(t.icon, color: t.color, size: 36),
           ),
@@ -643,7 +663,7 @@ class _ProfileHeroHeader extends StatelessWidget {
                   _ProfileChip(label: t.label, color: t.color, bgColor: t.bgColor),
                   const SizedBox(width: 8),
                   _ProfileChip(
-                    label: '${member.age} yrs',
+                    label: '${member.age} سنة',
                     color: AppColors.grey600,
                     bgColor: AppColors.grey100,
                   ),
@@ -677,7 +697,7 @@ class _ProfileChip extends StatelessWidget {
   }
 }
 
-// ─── Quick stats row (profile-type-aware) ─────────────────────────────────────
+// ─── Quick stats row ──────────────────────────────────────────────────────────
 class _QuickStatsRow extends StatelessWidget {
   final FamilyMember member;
   const _QuickStatsRow({required this.member});
@@ -688,7 +708,7 @@ class _QuickStatsRow extends StatelessWidget {
     return Row(
       children: stats.map((s) => Expanded(
         child: Padding(
-          padding: EdgeInsets.only(right: s != stats.last ? 10 : 0),
+          padding: EdgeInsets.only(left: s != stats.last ? 10 : 0),
           child: _StatTile(stat: s),
         ),
       )).toList(),
@@ -699,29 +719,29 @@ class _QuickStatsRow extends StatelessWidget {
     switch (t) {
       case ProfileType.child:
         return [
-          _StatData('Vaccines', '8/12', Icons.vaccines_rounded, AppColors.teal),
-          _StatData('Next visit', '3 days', Icons.calendar_today_rounded, AppColors.orange),
+          _StatData('التطعيمات', '٨/١٢', Icons.vaccines_rounded, AppColors.teal),
+          _StatData('الزيارة القادمة', 'بعد ٣ أيام', Icons.calendar_today_rounded, AppColors.orange),
         ];
       case ProfileType.elderly:
         return [
-          _StatData('Medications', '0/3 today', Icons.medication_rounded, AppColors.red),
-          _StatData('Last check', '2 hrs ago', Icons.access_time_rounded, AppColors.teal),
+          _StatData('الأدوية', '٠/٣ اليوم', Icons.medication_rounded, AppColors.red),
+          _StatData('آخر فحص', 'منذ ساعتين', Icons.access_time_rounded, AppColors.teal),
         ];
       case ProfileType.pregnant:
         return [
-          _StatData('Trimester', '2nd', Icons.pregnant_woman_rounded,
+          _StatData('الثلث', 'الثاني', Icons.pregnant_woman_rounded,
               const Color(0xFFAD1457)),
-          _StatData('Next test', 'Week 28', Icons.science_rounded, AppColors.orange),
+          _StatData('الفحص القادم', 'الأسبوع ٢٨', Icons.science_rounded, AppColors.orange),
         ];
       case ProfileType.chronic:
         return [
-          _StatData('Vitals', 'Not logged', Icons.monitor_heart_rounded, AppColors.orange),
-          _StatData('Adherence', '87%', Icons.medication_rounded, AppColors.green),
+          _StatData('العلامات الحيوية', 'لم تُسجَّل', Icons.monitor_heart_rounded, AppColors.orange),
+          _StatData('الالتزام', '٨٧٪', Icons.medication_rounded, AppColors.green),
         ];
       case ProfileType.adult:
         return [
-          _StatData('Next visit', 'None set', Icons.calendar_today_rounded, AppColors.teal),
-          _StatData('Records', '2 docs', Icons.folder_rounded, AppColors.teal),
+          _StatData('الزيارة القادمة', 'لم تُحدَّد', Icons.calendar_today_rounded, AppColors.teal),
+          _StatData('السجلات', 'وثيقتان', Icons.folder_rounded, AppColors.teal),
         ];
     }
   }
@@ -779,11 +799,11 @@ class _PanicButton extends StatelessWidget {
           decoration: const BoxDecoration(color: AppColors.redLight, shape: BoxShape.circle),
           child: const Icon(Icons.sos_rounded, color: AppColors.red, size: 32),
         ),
-        title: const Text('Send emergency alert?',
+        title: const Text('إرسال تنبيه طارئ؟',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
         content: Text(
-          "This will broadcast $memberName's GPS location to ALL family members.\n\nOnly use in a real emergency.",
+          'سيتم بث موقع $memberName الجغرافي لجميع أفراد العائلة.\n\nاستخدم هذا في حالات الطوارئ الحقيقية فقط.',
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 15, color: AppColors.grey600, height: 1.5),
         ),
@@ -800,7 +820,7 @@ class _PanicButton extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel', style: TextStyle(color: AppColors.grey900)),
+                child: const Text('إلغاء', style: TextStyle(color: AppColors.grey900)),
               ),
             ),
             const SizedBox(height: 10),
@@ -823,12 +843,12 @@ class _PanicButton extends StatelessWidget {
                     content: const Row(children: [
                       Icon(Icons.check_circle_rounded, color: Colors.white),
                       SizedBox(width: 12),
-                      Expanded(child: Text('Emergency alert sent to all family members',
+                      Expanded(child: Text('تم إرسال تنبيه الطوارئ لجميع أفراد العائلة',
                           style: TextStyle(color: Colors.white))),
                     ]),
                   ));
                 },
-                child: const Text('Yes, send SOS',
+                child: const Text('نعم، أرسل SOS',
                     style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             ),
@@ -860,15 +880,15 @@ class _PanicButton extends StatelessWidget {
             const SizedBox(width: 14),
             const Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Emergency Panic Button',
+                Text('زر الطوارئ',
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
                         color: AppColors.red)),
                 SizedBox(height: 2),
-                Text('Broadcasts GPS to all family members',
+                Text('يبث الموقع الجغرافي لجميع أفراد العائلة',
                     style: TextStyle(fontSize: 13, color: AppColors.grey600)),
               ]),
             ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.red),
+            const Icon(Icons.chevron_left_rounded, color: AppColors.red),
           ]),
         ),
       ),
@@ -895,7 +915,6 @@ class _ModuleCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Icon + optional badge row
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -911,11 +930,11 @@ class _ModuleCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Align(
-                        alignment: Alignment.topRight,
+                        alignment: Alignment.topLeft,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                           decoration: BoxDecoration(
-                            color: (module.badgeColor ?? module.color).withOpacity(0.12),
+                            color: (module.badgeColor ?? module.color).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -940,7 +959,7 @@ class _ModuleCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis),
               const SizedBox(height: 4),
               Text(module.subtitle,
-                  style: const TextStyle(fontSize: 11, color: AppColors.grey600, height: 1.4),
+                  style: const TextStyle(fontSize: 10,color: AppColors.grey600, height: 1.4),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis),
             ],

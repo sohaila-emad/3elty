@@ -15,7 +15,7 @@ class DatabaseProvider {
   }
 
   static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
@@ -134,6 +134,21 @@ class DatabaseProvider {
       )
     ''');
 
+    // Ultrasound records (pregnancy module)
+    batch.execute('''
+      CREATE TABLE ultrasounds (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        family_id    TEXT    NOT NULL,
+        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        month_label  TEXT    NOT NULL,
+        session_type TEXT    NOT NULL,
+        date         TEXT    NOT NULL,
+        doctor       TEXT    NOT NULL DEFAULT '',
+        notes        TEXT    NOT NULL DEFAULT '',
+        created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+
     await batch.commit(noResult: true);
   }
 
@@ -243,7 +258,38 @@ class DatabaseProvider {
         )
       ''');
 
+      batch.execute('''
+        CREATE TABLE ultrasounds (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          family_id    TEXT    NOT NULL,
+          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          month_label  TEXT    NOT NULL,
+          session_type TEXT    NOT NULL,
+          date         TEXT    NOT NULL,
+          doctor       TEXT    NOT NULL DEFAULT '',
+          notes        TEXT    NOT NULL DEFAULT '',
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+      ''');
+
       await batch.commit(noResult: true);
+    }
+
+    // ── Migration v2 → v3: إضافة جدول ultrasounds ──────────────────────────
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS ultrasounds (
+          id           INTEGER PRIMARY KEY AUTOINCREMENT,
+          family_id    TEXT    NOT NULL,
+          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+          month_label  TEXT    NOT NULL,
+          session_type TEXT    NOT NULL,
+          date         TEXT    NOT NULL,
+          doctor       TEXT    NOT NULL DEFAULT '',
+          notes        TEXT    NOT NULL DEFAULT '',
+          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        )
+      ''');
     }
   }
 }
