@@ -23,13 +23,55 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
     _loadVitals();
   }
 
+  // --- SMART ANALYZER ---
+  // Returns health status and color based on age-specific growth standards
+  Map<String, dynamic> getSmartFeedback(String type, double value, int ageInYears) {
+    if (type == 'weight') {
+      if (ageInYears < 1) { // Infants (0-1 year)
+        if (value < 2.5) return {'msg': 'Severely Underweight', 'color': Colors.red};
+        if (value > 12.0) return {'msg': 'Overweight for Age', 'color': Colors.orange};
+      } else if (ageInYears <= 5) { // Toddlers (1-5 years)
+        if (value < 9.0) return {'msg': 'Underweight', 'color': Colors.orange};
+        if (value > 25.0) return {'msg': 'Overweight', 'color': Colors.orange};
+      } else { // Older children
+        if (value < 20.0) return {'msg': 'Underweight', 'color': Colors.orange};
+        if (value > 60.0) return {'msg': 'Overweight', 'color': Colors.orange};
+      }
+      return {'msg': 'Healthy Weight', 'color': Colors.green};
+    } else { // Height
+      if (ageInYears < 1) { // Infant length
+        if (value < 40) return {'msg': 'Very Short Stature', 'color': Colors.red};
+        if (value > 85) return {'msg': 'Unusually Tall', 'color': Colors.blue};
+      } else if (ageInYears <= 5) { // Toddlers
+        if (value < 75) return {'msg': 'Below Average Height', 'color': Colors.orange};
+        if (value > 125) return {'msg': 'Above Average Height', 'color': Colors.blue};
+      }
+      return {'msg': 'Normal Height', 'color': Colors.green};
+    }
+  }
+
+  // --- LOGICAL VALIDATION ---
+  // Blocks impossible data entry based on age to ensure data integrity
+  String? validateEntry(String type, double value, int ageInYears) {
+    if (type == 'height') {
+      // Logic: A 3-month-old (age < 1) cannot be 120cm
+      if (ageInYears < 1 && value > 90) return "Height exceeds infant limits (< 90cm)";
+      if (ageInYears < 3 && value > 120) return "Height exceeds toddler limits (< 120cm)";
+      if (value < 20 || value > 250) return "Invalid height range (20-250cm)";
+    } else if (type == 'weight') {
+      if (ageInYears < 1 && value > 15) return "Weight exceeds infant limits (< 15kg)";
+      if (value < 0.5 || value > 200) return "Invalid weight range (0.5-200kg)";
+    }
+    return null; // Passes validation
+  }
+
   Future<void> _loadVitals() async {
     if (widget.member.id == null) {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
       return;
     }
     try {
-      setState(() => _loading = true);
+      if (mounted) setState(() => _loading = true);
       final vitals = await _repo.getVitalsForMember(widget.member.id!);
       if (!mounted) return;
       final filtered = vitals.where((v) => v.type == 'height' || v.type == 'weight').toList();
@@ -38,30 +80,32 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
         _loading = false;
       });
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      _showError('تعذّر تحميل بيانات النمو: $e');
+      if (mounted) setState(() => _loading = false);
+      _showError('Error loading data: $e');
     }
   }
 
-  void _showError(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: AppColors.red, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), content: Text(msg, style: const TextStyle(color: Colors.white))));
-
-  void _showSuccess(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(backgroundColor: AppColors.green, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), content: Text(msg, style: const TextStyle(color: Colors.white))));
+  void _showError(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(backgroundColor: AppColors.red, behavior: SnackBarBehavior.floating, content: Text(msg)),
+    );
+  }
 
   void _showAddHeightWeightDialog() {
-    final heightCtrl = TextEditingController();
-    final weightCtrl = TextEditingController();
+    final hCtrl = TextEditingController();
+    final wCtrl = TextEditingController();
     
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('تسجيل بيانات النمو'),
+        title: const Text('تسجيل بيانات النمو', textAlign: TextAlign.right),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: heightCtrl,
+              controller: hCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 hintText: 'الطول (سم)',
@@ -71,7 +115,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: weightCtrl,
+              controller: wCtrl,
               keyboardType: TextInputType.number,
               decoration: InputDecoration(
                 hintText: 'الوزن (كجم)',
@@ -85,74 +129,49 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () async {
-              final heightStr = heightCtrl.text.trim();
-              final weightStr = weightCtrl.text.trim();
-              
-              if (heightStr.isEmpty && weightStr.isEmpty) {
-                _showError('يرجى إدخال الطول أو الوزن');
+              final hVal = double.tryParse(hCtrl.text.trim());
+              final wVal = double.tryParse(wCtrl.text.trim());
+
+              if (hVal == null && wVal == null) {
+                _showError('Please enter valid numbers');
                 return;
               }
-              
-              final navigator = Navigator.of(ctx);
-              final messenger = ScaffoldMessenger.of(context);
 
+              // Apply Logic Validation based on age before saving
+              if (hVal != null) {
+                final err = validateEntry('height', hVal, widget.member.age);
+                if (err != null) { _showError(err); return; }
+              }
+              if (wVal != null) {
+                final err = validateEntry('weight', wVal, widget.member.age);
+                if (err != null) { _showError(err); return; }
+              }
+
+              final nav = Navigator.of(ctx);
               try {
                 final familyId = await _authService.familyId;
-                if (!mounted) return;
-                if (familyId == null) {
-                  _showError('لم يتم العثور على العائلة. يرجى تسجيل الدخول مجدداً.');
-                  return;
-                }
-                
-                // Save height if provided
-                if (heightStr.isNotEmpty) {
-                  final height = double.tryParse(heightStr);
-                  if (height == null || height <= 0) {
-                    _showError('يجب أن يكون الطول رقماً موجباً صحيحاً');
-                    return;
-                  }
+                if (familyId == null) return;
+
+                if (hVal != null) {
                   await _repo.insertVital(VitalRecord(
-                    familyId: familyId,
-                    memberId: widget.member.id!,
-                    type: 'height',
-                    value: height,
-                    unit: 'cm',
+                    familyId: familyId, memberId: widget.member.id!,
+                    type: 'height', value: hVal, unit: 'cm',
                   ));
                 }
-                
-                // Save weight if provided
-                if (weightStr.isNotEmpty) {
-                  final weight = double.tryParse(weightStr);
-                  if (weight == null || weight <= 0) {
-                    _showError('يجب أن يكون الوزن رقماً موجباً صحيحاً');
-                    return;
-                  }
+                if (wVal != null) {
                   await _repo.insertVital(VitalRecord(
-                    familyId: familyId,
-                    memberId: widget.member.id!,
-                    type: 'weight',
-                    value: weight,
-                    unit: 'kg',
+                    familyId: familyId, memberId: widget.member.id!,
+                    type: 'weight', value: wVal, unit: 'kg',
                   ));
                 }
-                
-                if (!mounted) return;
-                navigator.pop();
-                messenger.showSnackBar(SnackBar(
-                  backgroundColor: AppColors.green,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  content: const Text('تم تسجيل بيانات النمو بنجاح', style: TextStyle(color: Colors.white)),
-                ));
-                heightCtrl.dispose();
-                weightCtrl.dispose();
-                await _loadVitals();
+                nav.pop();
+                _loadVitals();
               } catch (e) {
-                _showError('تعذّر حفظ بيانات النمو: $e');
+                _showError('Save failed: $e');
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.teal),
-            child: const Text('Log', style: TextStyle(color: Colors.white)),
+            child: const Text('حفظ', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -163,14 +182,6 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
   Widget build(BuildContext context) {
     final t = widget.member.profileType;
     
-    // Group vitals by type
-    final heights = _vitals.where((v) => v.type == 'height').toList();
-    final weights = _vitals.where((v) => v.type == 'weight').toList();
-    
-    // Get latest values
-    final latestHeight = heights.isNotEmpty ? heights.last : null;
-    final latestWeight = weights.isNotEmpty ? weights.last : null;
-    
     return Scaffold(
       backgroundColor: AppColors.grey50,
       appBar: AppBar(title: const Text('تتبع النمو')),
@@ -178,6 +189,7 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
           ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
           : CustomScrollView(
               slivers: [
+                // Profile Header (Retained UI)
                 SliverToBoxAdapter(
                   child: Container(
                     color: Colors.white,
@@ -185,146 +197,75 @@ class _GrowthTrackingScreenState extends State<GrowthTrackingScreen> {
                     child: Row(
                       children: [
                         Container(
-                          width: 48,
-                          height: 48,
+                          width: 48, height: 48,
                           decoration: BoxDecoration(color: t.bgColor, borderRadius: BorderRadius.circular(12)),
-                          child: Icon(t.icon, color: t.color, size: 24),
+                          child: Icon(t.icon, color: t.color),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(widget.member.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.grey900)),
-                              Text('${widget.member.age} years old', style: const TextStyle(fontSize: 13, color: AppColors.grey600)),
-                            ],
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(widget.member.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            Text('${widget.member.age} Years Old', style: const TextStyle(color: AppColors.grey600)),
+                          ],
                         ),
                       ],
                     ),
                   ),
                 ),
                 const SliverToBoxAdapter(child: Divider(height: 1)),
-                if (latestHeight != null || latestWeight != null)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Current Measurements', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.grey900)),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              if (latestHeight != null)
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text('Height', style: TextStyle(fontSize: 12, color: AppColors.grey600, fontWeight: FontWeight.w500)),
-                                          const SizedBox(height: 8),
-                                          Text('${latestHeight.value} ${latestHeight.unit}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.teal)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              if (latestHeight != null && latestWeight != null) const SizedBox(width: 12),
-                              if (latestWeight != null)
-                                Expanded(
-                                  child: Material(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(16),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Text('Weight', style: TextStyle(fontSize: 12, color: AppColors.grey600, fontWeight: FontWeight.w500)),
-                                          const SizedBox(height: 8),
-                                          Text('${latestWeight.value} ${latestWeight.unit}', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: AppColors.green)),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: const Text('Growth History', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.grey900)),
-                  ),
-                ),
-                if (_vitals.isEmpty)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.trending_up_outlined, size: 64, color: AppColors.grey200),
-                          const SizedBox(height: 16),
-                          const Text('No growth measurements yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.grey600)),
-                        ],
-                      ),
-                    ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    sliver: SliverList.separated(
-                      itemCount: _vitals.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 10),
-                      itemBuilder: (_, i) {
-                        final vital = _vitals[i];
-                        final isHeight = vital.type == 'height';
-                        return Material(
+                
+                // History List with Feedback (Retained UI with Smart Color Logic)
+                SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverList.separated(
+                    itemCount: _vitals.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final vital = _vitals[index];
+                      final isHeight = vital.type == 'height';
+                      final feedback = getSmartFeedback(vital.type, vital.value, widget.member.age);
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: feedback['color'].withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Icon(isHeight ? Icons.straighten : Icons.scale, color: feedback['color'], size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(isHeight ? 'الطول' : 'الوزن', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                  Text(feedback['msg'], style: TextStyle(color: feedback['color'], fontSize: 12, fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: isHeight ? AppColors.teal.withValues(alpha: 0.1) : AppColors.green.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Icon(
-                                    isHeight ? Icons.straighten : Icons.scale,
-                                    color: isHeight ? AppColors.teal : AppColors.green,
-                                    size: 20,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(isHeight ? 'Height' : 'Weight', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.grey900)),
-                                      Text('${vital.value} ${vital.unit}', style: const TextStyle(fontSize: 13, color: AppColors.grey600, fontWeight: FontWeight.w500)),
-                                    ],
-                                  ),
-                                ),
-                                Text(vital.recordedAt?.toString().split(' ').first ?? 'N/A', style: const TextStyle(fontSize: 12, color: AppColors.grey500)),
+                                Text('${vital.value} ${vital.unit}', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.grey900)),
+                                Text(vital.recordedAt?.toString().split(' ').first ?? '', style: const TextStyle(fontSize: 11, color: AppColors.grey500)),
                               ],
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
+                ),
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),

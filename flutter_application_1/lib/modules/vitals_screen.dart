@@ -93,7 +93,7 @@ class _VitalsScreenState extends State<VitalsScreen> {
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(
+                child: ElevatedButton( 
                   onPressed: () async {
                     final double? val = double.tryParse(valueCtrl.text);
                     
