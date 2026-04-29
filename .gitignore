@@ -1,0 +1,4 @@
+*.log 
+.vscode/ 
+android/.gradle/ 
+android/local.properties 
