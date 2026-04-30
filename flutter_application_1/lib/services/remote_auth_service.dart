@@ -1,7 +1,7 @@
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 
 /// Remote authentication service using Firebase Firestore.
 /// Manages family signup, signin, and token management.
@@ -16,11 +16,12 @@ class RemoteAuthService {
   final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   // Secure storage keys
-  static const String _keyAuthToken = 'auth_token';
+  static const String _keyAuthToken    = 'auth_token';
   static const String _keyRefreshToken = 'refresh_token';
-  static const String _keyFamilyId = 'family_id';
-  static const String _keyUserId = 'user_id';
-  static const String _keyUserRole = 'user_role';
+  static const String _keyFamilyId     = 'family_id';
+  static const String _keyUserId       = 'user_id';
+  static const String _keyUserRole     = 'user_role';
+  static const String _keyTokenExpiry  = 'token_expiry'; // ← NEW: replaces JwtDecoder
 
   // Getters for current session info
   Future<String?> get authToken async =>
@@ -36,7 +37,6 @@ class RemoteAuthService {
       await _secureStorage.read(key: _keyUserRole);
 
   /// Sign up a new family with admin credentials.
-  /// Returns family_id if successful, throws exception if fails.
   Future<String> signUpFamily({
     required String familyUsername,
     required String displayName,
@@ -44,7 +44,6 @@ class RemoteAuthService {
     required String adminPassword,
   }) async {
     try {
-      // Validate inputs
       if (familyUsername.trim().isEmpty || familyUsername.trim().length < 3) {
         throw Exception('Family username must be at least 3 characters');
       }
@@ -58,7 +57,6 @@ class RemoteAuthService {
         throw Exception('Admin password must be at least 6 characters');
       }
 
-      // Check if family_username already exists
       final existingFamily = await _firestore
           .collection('families')
           .where('family_username', isEqualTo: familyUsername.trim())
@@ -69,7 +67,6 @@ class RemoteAuthService {
         throw Exception('Family username already exists');
       }
 
-      // Create family document with family password
       final familyDocRef = _firestore.collection('families').doc();
       final familyId = familyDocRef.id;
 
@@ -81,13 +78,12 @@ class RemoteAuthService {
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // Create admin user document with admin password
       final userDocRef = _firestore.collection('users').doc();
       final userId = userDocRef.id;
 
       await userDocRef.set({
         'family_id': familyId,
-        'username': 'admin', // Admin user is always 'admin'
+        'username': 'admin',
         'password_hash': _hashPassword(adminPassword),
         'role': 'admin',
         'is_active': true,
@@ -95,7 +91,6 @@ class RemoteAuthService {
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      // Generate and store tokens
       final token = _generateToken(userId, familyId, 'admin');
       await _storeTokens(token, familyId, userId, 'admin');
 
@@ -106,13 +101,11 @@ class RemoteAuthService {
   }
 
   /// Sign in an existing family with family credentials.
-  /// Returns family_id if successful, throws exception if fails.
   Future<String> signInFamily({
     required String familyUsername,
     required String familyPassword,
   }) async {
     try {
-      // Find family by family_username
       final familySnapshot = await _firestore
           .collection('families')
           .where('family_username', isEqualTo: familyUsername.trim())
@@ -125,21 +118,18 @@ class RemoteAuthService {
 
       final familyDoc = familySnapshot.docs.first;
       final familyId = familyDoc.id;
-      
-      // Safely get family password hash with type checking
+
       final data = familyDoc.data();
       final storedFamilyPasswordHash = data['password_hash'];
       if (storedFamilyPasswordHash == null || storedFamilyPasswordHash is! String) {
-        throw Exception('Invalid family password configuration. Please contact support.');
+        throw Exception('Invalid family password configuration.');
       }
 
-      // Verify family password
       final inputHash = _hashPassword(familyPassword);
-      if (storedFamilyPasswordHash.toString() != inputHash) {
+      if (storedFamilyPasswordHash != inputHash) {
         throw Exception('Incorrect family password');
       }
 
-      // Find admin user for this family (to get user role)
       final userSnapshot = await _firestore
           .collection('users')
           .where('family_id', isEqualTo: familyId)
@@ -155,7 +145,6 @@ class RemoteAuthService {
       final userId = userDoc.id;
       final userRole = userDoc['role'] as String;
 
-      // Generate and store tokens (initially as admin, may downgrade later)
       final token = _generateToken(userId, familyId, userRole);
       await _storeTokens(token, familyId, userId, userRole);
 
@@ -165,15 +154,75 @@ class RemoteAuthService {
     }
   }
 
-  /// Sign in as a family member (if they have individual login).
-  /// Returns family_id if successful, throws exception if fails.
+  /// Sign in as a family member using phone + PIN.
+  Future<String> signInWithPin({
+    required String phone,
+    required String pin,
+  }) async {
+    final query = await _firestore
+        .collection('users')
+        .where('phone', isEqualTo: phone.trim())
+        .limit(1)
+        .get();
+
+    if (query.docs.isEmpty) {
+      throw Exception('No account found for this phone number.');
+    }
+
+    final userDoc = query.docs.first;
+    final data = userDoc.data();
+    final userId = userDoc.id;
+    final familyId = data['family_id'] as String?;
+
+    if (familyId == null) throw Exception('Account not linked to a family.');
+
+    // Check lockout
+    final lockedUntil = data['locked_until'] as String?;
+    if (lockedUntil != null) {
+      final lockTime = DateTime.tryParse(lockedUntil);
+      if (lockTime != null && DateTime.now().isBefore(lockTime)) {
+        throw Exception('Account locked. Try again later.');
+      }
+    }
+
+    final storedHash = data['pin_hash'] as String?;
+    if (storedHash == null) throw Exception('PIN not set up for this account.');
+
+    final failedAttempts = data['failed_attempts'] as int? ?? 0;
+
+    if (storedHash != _hashPassword(pin)) {
+      final newAttempts = failedAttempts + 1;
+      final updateData = <String, dynamic>{'failed_attempts': newAttempts};
+      if (newAttempts >= 5) {
+        updateData['locked_until'] =
+            DateTime.now().add(const Duration(minutes: 30)).toIso8601String();
+      }
+      await _firestore.collection('users').doc(userId).update(updateData);
+      final remaining = 5 - newAttempts;
+      throw Exception(remaining > 0
+          ? 'Invalid PIN. Attempts remaining: $remaining'
+          : 'Account locked for 30 minutes.');
+    }
+
+    // Correct PIN — reset counters
+    await _firestore.collection('users').doc(userId).update({
+      'failed_attempts': 0,
+      'locked_until': FieldValue.delete(),
+      'last_login': FieldValue.serverTimestamp(),
+    });
+
+    final token = _generateToken(userId, familyId, 'member');
+    await _storeTokens(token, familyId, userId, 'member');
+    return familyId;
+  }
+
+  /// Sign in as a member using family username + member username + password.
   Future<String> signInMember({
     required String familyUsername,
     required String memberUsername,
     required String password,
   }) async {
     try {
-      // Find family by family_username
       final familySnapshot = await _firestore
           .collection('families')
           .where('family_username', isEqualTo: familyUsername.trim())
@@ -186,7 +235,6 @@ class RemoteAuthService {
 
       final familyId = familySnapshot.docs.first.id;
 
-      // Find user in this family
       final userSnapshot = await _firestore
           .collection('users')
           .where('family_id', isEqualTo: familyId)
@@ -203,12 +251,10 @@ class RemoteAuthService {
       final storedPasswordHash = userDoc['password_hash'] as String;
       final userRole = userDoc['role'] as String;
 
-      // Verify password
       if (storedPasswordHash != _hashPassword(password)) {
         throw Exception('Invalid password');
       }
 
-      // Generate and store tokens
       final token = _generateToken(userId, familyId, userRole);
       await _storeTokens(token, familyId, userId, userRole);
 
@@ -218,8 +264,7 @@ class RemoteAuthService {
     }
   }
 
-  /// Check if a family_username already exists in the database.
-  /// Used to determine if user should sign up or sign in.
+  /// Check if a family_username already exists.
   Future<bool> familyExists(String familyUsername) async {
     try {
       final result = await _firestore
@@ -227,21 +272,26 @@ class RemoteAuthService {
           .where('family_username', isEqualTo: familyUsername.trim())
           .limit(1)
           .get();
-
       return result.docs.isNotEmpty;
     } catch (e) {
       return false;
     }
   }
 
-  /// Check if user is currently signed in (has valid token).
+  /// Check if user is currently signed in (has valid non-expired session).
+  /// FIX: No longer uses JwtDecoder — stores expiry separately in secure storage.
   Future<bool> isSignedIn() async {
     try {
       final token = await authToken;
       if (token == null) return false;
 
-      // Check if token is expired
-      return !JwtDecoder.isExpired(token);
+      final expiryStr = await _secureStorage.read(key: _keyTokenExpiry);
+      if (expiryStr == null) return false;
+
+      final expiry = DateTime.tryParse(expiryStr);
+      if (expiry == null) return false;
+
+      return DateTime.now().isBefore(expiry);
     } catch (e) {
       return false;
     }
@@ -255,14 +305,10 @@ class RemoteAuthService {
 
       final userDoc =
           await _firestore.collection('users').doc(userIdValue).get();
-
       if (!userDoc.exists) return null;
 
       return {
         'id': userDoc.id,
-        'family_id': userDoc['family_id'],
-        'username': userDoc['username'],
-        'role': userDoc['role'],
         ...userDoc.data() as Map<String, dynamic>,
       };
     } catch (e) {
@@ -278,13 +324,10 @@ class RemoteAuthService {
 
       final familyDoc =
           await _firestore.collection('families').doc(familyIdValue).get();
-
       if (!familyDoc.exists) return null;
 
       return {
         'id': familyDoc.id,
-        'family_username': familyDoc['family_username'],
-        'display_name': familyDoc['display_name'],
         ...familyDoc.data() as Map<String, dynamic>,
       };
     } catch (e) {
@@ -292,64 +335,44 @@ class RemoteAuthService {
     }
   }
 
-  /// Verify admin password for current family (for admin access verification).
-  /// Throws exception if password is invalid.
+  /// Verify admin password for current family.
   Future<void> verifyAdminPassword(String adminPassword) async {
     try {
-      final familyId = await this.familyId;
-      if (familyId == null) {
-        throw Exception('No active family session');
-      }
+      final familyIdValue = await familyId;
+      if (familyIdValue == null) throw Exception('No active family session');
 
-      // Find the admin user for this family
       final adminSnapshot = await _firestore
           .collection('users')
-          .where('family_id', isEqualTo: familyId)
+          .where('family_id', isEqualTo: familyIdValue)
           .where('role', isEqualTo: 'admin')
           .limit(1)
           .get();
 
-      if (adminSnapshot.docs.isEmpty) {
-        throw Exception('Admin user not found');
+      if (adminSnapshot.docs.isEmpty) throw Exception('Admin user not found');
+
+      final data = adminSnapshot.docs.first.data();
+      final storedHash = data['password_hash'];
+      if (storedHash == null || storedHash is! String) {
+        throw Exception('Admin password not configured.');
       }
 
-      final adminDoc = adminSnapshot.docs.first;
-      final data = adminDoc.data();
-      
-      // Safely get password_hash, handling type conversion
-      final storedPasswordHash = data['password_hash'];
-      if (storedPasswordHash == null || storedPasswordHash is! String) {
-        throw Exception('Admin password not configured. Please contact support.');
-      }
-
-      // Verify password
-      final inputHash = _hashPassword(adminPassword);
-      if (storedPasswordHash.toString() != inputHash) {
+      if (storedHash != _hashPassword(adminPassword)) {
         throw Exception('Incorrect admin password');
       }
-
-      // Admin password verified successfully - no need to update tokens
-      // they were already set during initial signin
     } catch (e) {
       throw Exception('Admin verification failed: $e');
     }
   }
 
-  /// Downgrade admin user to member mode (if they don't verify admin password).
-  /// Changes user role from 'admin' to 'member' and updates token.
+  /// Downgrade admin user to member mode.
   Future<void> downgradeToMemberMode() async {
     try {
       final userIdValue = await userId;
       final familyIdValue = await familyId;
-
       if (userIdValue == null || familyIdValue == null) {
         throw Exception('No active session to downgrade');
       }
-
-      // Update stored role to 'member'
       await _secureStorage.write(key: _keyUserRole, value: 'member');
-
-      // Generate new token with 'member' role
       final newToken = _generateToken(userIdValue, familyIdValue, 'member');
       await _secureStorage.write(key: _keyAuthToken, value: newToken);
     } catch (e) {
@@ -357,7 +380,7 @@ class RemoteAuthService {
     }
   }
 
-  /// Sign out the current user (clear tokens).
+  /// Sign out — clear all tokens.
   Future<void> signOut() async {
     try {
       await _secureStorage.delete(key: _keyAuthToken);
@@ -365,52 +388,13 @@ class RemoteAuthService {
       await _secureStorage.delete(key: _keyFamilyId);
       await _secureStorage.delete(key: _keyUserId);
       await _secureStorage.delete(key: _keyUserRole);
+      await _secureStorage.delete(key: _keyTokenExpiry);
     } catch (e) {
       throw Exception('Sign out failed: $e');
     }
   }
-  
 
-  // ─── Private Helper Methods ────────────────────────────────────────────────
-
-  /// Hash password using SHA256 (simple implementation).
-  /// In production, use bcrypt on server-side and verify there.
-  String _hashPassword(String password) {
-    return sha256.convert(password.codeUnits).toString();
-  }
-
-  /// Generate a simple JWT-like token.
-  /// In production, generate tokens on server-side.
-  String _generateToken(String userId, String familyId, String role) {
-    final now = DateTime.now();
-    final expiry = now.add(const Duration(hours: 24));
-
-    final payload = {
-      'sub': userId,
-      'family_id': familyId,
-      'role': role,
-      'iat': (now.millisecondsSinceEpoch ~/ 1000),
-      'exp': (expiry.millisecondsSinceEpoch ~/ 1000),
-    };
-
-    // Simple base64 encoding (for demo purposes)
-    // In production: use proper JWT library and sign on server
-    return base64Encode(payload.toString().codeUnits);
-  }
-
-  /// Store tokens in secure storage.
-  Future<void> _storeTokens(
-    String token,
-    String familyId,
-    String userId,
-    String userRole,
-  ) async {
-    await _secureStorage.write(key: _keyAuthToken, value: token);
-    await _secureStorage.write(key: _keyFamilyId, value: familyId);
-    await _secureStorage.write(key: _keyUserId, value: userId);
-    await _secureStorage.write(key: _keyUserRole, value: userRole);
-  }
-// ══ Member PIN & Access Methods ════════════════════════════════════════════
+  // ── Member PIN helpers ─────────────────────────────────────────────────────
 
   Future<Map<String, dynamic>?> getUserDocument(String userId) async {
     try {
@@ -448,52 +432,6 @@ class RemoteAuthService {
     }
   }
 
-  Future<String> signInWithPin({
-    required String phone,
-    required String pin,
-  }) async {
-    final query = await _firestore
-        .collection('users')
-        .where('phone', isEqualTo: phone.trim())
-        .limit(1)
-        .get();
-    if (query.docs.isEmpty) throw Exception('No account found for this phone number.');
-    final userDoc = query.docs.first;
-    final data = userDoc.data();
-    final userId = userDoc.id;
-    final familyId = data['family_id'] as String?;
-    if (familyId == null) throw Exception('Account not linked to a family.');
-    final lockedUntil = data['locked_until'] is String ? data['locked_until'] as String : null;
-    if (lockedUntil != null) {
-      final lockTime = DateTime.tryParse(lockedUntil);
-      if (lockTime != null && DateTime.now().isBefore(lockTime)) {
-        throw Exception('Account locked. Try again later.');
-      }
-    }
-    final storedHash = data['pin_hash'] as String?;
-    if (storedHash == null) throw Exception('PIN not set up for this account.');
-    final failedAttempts = data['failed_attempts'] as int? ?? 0;
-    if (storedHash != _hashPassword(pin)) {
-      final newAttempts = failedAttempts + 1;
-      final updateData = <String, dynamic>{'failed_attempts': newAttempts};
-      if (newAttempts >= 5) {
-        updateData['locked_until'] = DateTime.now().add(const Duration(minutes: 30)).toIso8601String();
-      }
-      await _firestore.collection('users').doc(userId).update(updateData);
-      final remaining = 5 - newAttempts;
-      throw Exception(remaining > 0 ? 'Invalid PIN. Attempts remaining: $remaining' : 'Account locked for 30 minutes.');
-    }
-    // CORRECT
-    await _firestore.collection('users').doc(userId).update({
-      'failed_attempts': 0,
-      'locked_until': FieldValue.delete(),  // properly removes the field
-      'last_login': FieldValue.serverTimestamp(),
-    });
-    final token = _generateToken(userId, familyId, 'member');
-    await _storeTokens(token, familyId, userId, 'member');
-    return familyId;
-  }
-
   Future<void> setupMemberCredentials({
     required String memberId,
     required String phone,
@@ -507,7 +445,8 @@ class RemoteAuthService {
     });
   }
 
-  Future<void> recordFailedAttempt(String userId, String familyId, String attemptType) async {
+  Future<void> recordFailedAttempt(
+      String userId, String familyId, String attemptType) async {
     await _firestore.collection('access_log').add({
       'user_id': userId,
       'family_id': familyId,
@@ -531,7 +470,8 @@ class RemoteAuthService {
     });
   }
 
-  Future<List<Map<String, dynamic>>> getMemberAccessHistory(String memberId) async {
+  Future<List<Map<String, dynamic>>> getMemberAccessHistory(
+      String memberId) async {
     try {
       final snapshot = await _firestore
           .collection('access_log')
@@ -539,30 +479,100 @@ class RemoteAuthService {
           .orderBy('timestamp', descending: true)
           .limit(50)
           .get();
-      return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
+      return snapshot.docs
+          .map((doc) => {'id': doc.id, ...doc.data()})
+          .toList();
     } catch (e) {
       return [];
     }
   }
-}
 
-// Helper function for base64 encoding
-String base64Encode(List<int> bytes) {
-  const String _base64Alphabet =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  final StringBuffer result = StringBuffer();
-  for (int i = 0; i < bytes.length; i += 3) {
-    final int b1 = bytes[i];
-    final int? b2 = i + 1 < bytes.length ? bytes[i + 1] : null;
-    final int? b3 = i + 2 < bytes.length ? bytes[i + 2] : null;
-    final int byte1 = (b1 >> 2) & 0x3F;
-    final int byte2 = (((b1 & 0x03) << 4) | (b2 != null ? (b2 >> 4) : 0)) & 0x3F;
-    final int byte3 = b2 != null ? (((b2 & 0x0F) << 2) | (b3 != null ? (b3 >> 6) : 0)) & 0x3F : 64;
-    final int byte4 = b3 != null ? (b3 & 0x3F) : 64;
-    result.write(_base64Alphabet[byte1]);
-    result.write(_base64Alphabet[byte2]);
-    if (byte3 < 64) { result.write(_base64Alphabet[byte3]); } else { result.write('='); }
-    if (byte4 < 64) { result.write(_base64Alphabet[byte4]); } else { result.write('='); }
+  /// Check if a phone number was registered by any admin in Firestore.
+  /// Used by FirstTimeSetupScreen before sending OTP.
+  Future<bool> isPhoneRegisteredByAdmin(String phone) async {
+    try {
+      final result = await _firestore
+          .collection('users')
+          .where('phone', isEqualTo: phone.trim())
+          .limit(1)
+          .get();
+      return result.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
   }
-  return result.toString();
+  
+  /// Save PIN hash to the members document identified by phone number.
+  /// Called after OTP is verified and user sets their PIN.
+  Future<void> setupMemberPinByPhone({
+    required String phone,
+    required String pin,
+  }) async {
+    final result = await _firestore
+        .collection('users')
+        .where('phone', isEqualTo: phone.trim())
+        .limit(1)
+        .get();
+  
+    if (result.docs.isEmpty) {
+      throw Exception('No member found with this phone number');
+    }
+  
+    final memberId = result.docs.first.id;
+    await _firestore.collection('members').doc(memberId).update({
+      'pin_hash':   _hashPassword(pin),
+      'pin_set_at': FieldValue.serverTimestamp(),
+    });
+  
+    // Also update users collection if a user doc exists for this member
+    final userResult = await _firestore
+        .collection('users')
+        .where('phone', isEqualTo: phone.trim())
+        .limit(1)
+        .get();
+  
+    if (userResult.docs.isNotEmpty) {
+      await _firestore
+          .collection('users')
+          .doc(userResult.docs.first.id)
+          .update({
+        'pin_hash':   _hashPassword(pin),
+        'pin_set_at': FieldValue.serverTimestamp(),
+      });
+    }
+  }
+  // ── Private helpers ────────────────────────────────────────────────────────
+
+  String _hashPassword(String password) {
+    return sha256.convert(password.codeUnits).toString();
+  }
+
+  /// Generates a simple base64 token for local session tracking.
+  /// NOTE: This is NOT a real JWT — do not use JwtDecoder on it.
+  /// Expiry is tracked separately in _keyTokenExpiry.
+  String _generateToken(String userId, String familyId, String role) {
+    final payload = json.encode({
+      'sub': userId,
+      'family_id': familyId,
+      'role': role,
+      'iat': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
+    return base64Url.encode(utf8.encode(payload));
+  }
+
+  /// Store tokens + expiry in secure storage.
+  Future<void> _storeTokens(
+    String token,
+    String familyId,
+    String userId,
+    String userRole,
+  ) async {
+    final expiry =
+        DateTime.now().add(const Duration(hours: 24)).toIso8601String();
+    await _secureStorage.write(key: _keyAuthToken, value: token);
+    await _secureStorage.write(key: _keyFamilyId, value: familyId);
+    await _secureStorage.write(key: _keyUserId, value: userId);
+    await _secureStorage.write(key: _keyUserRole, value: userRole);
+    await _secureStorage.write(key: _keyTokenExpiry, value: expiry); // ← FIX
+  }
 }

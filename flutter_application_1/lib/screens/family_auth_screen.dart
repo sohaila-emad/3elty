@@ -1,10 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_application_1/services/remote_auth_service.dart';
 import 'package:flutter_application_1/services/firestore_service.dart';
 import '../main.dart';
 
 /// Screen for family signup/signin.
-/// First step of app authentication flow.
 class FamilyAuthScreen extends StatefulWidget {
   const FamilyAuthScreen({super.key});
 
@@ -15,25 +15,35 @@ class FamilyAuthScreen extends StatefulWidget {
 class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   final _familyUsernameController = TextEditingController();
   final _familyPasswordController = TextEditingController();
-  final _adminPasswordController = TextEditingController();
-  final _displayNameController = TextEditingController();
+  final _adminPasswordController  = TextEditingController();
+  final _displayNameController    = TextEditingController();
 
-  final _authService = RemoteAuthService();
+  final _authService      = RemoteAuthService();
   final _firestoreService = FirestoreService();
 
-  bool _isSignUp = false;
+  // ── FIX: debounce timer prevents Firestore call on every keystroke ──────────
+  Timer? _debounce;
+
+  bool _isSignUp          = false;
   bool _showPasswordField = false;
-  bool _isLoading = false;
-  bool _familyExists = false;
+  bool _isLoading         = false;
+  bool _familyExists      = false;
   String? _errorMessage;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _familyUsernameController.dispose();
     _familyPasswordController.dispose();
     _adminPasswordController.dispose();
     _displayNameController.dispose();
     super.dispose();
+  }
+
+  /// Called on every keystroke — debounces 600ms before hitting Firestore.
+  void _onUsernameChanged(String _) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 600), _checkFamilyExists);
   }
 
   /// Check if family exists and update UI accordingly.
@@ -49,15 +59,17 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
 
     try {
       final exists = await _authService.familyExists(username);
+      if (!mounted) return;
       setState(() {
-        _familyExists = exists;
-        _isSignUp = !exists; // Auto-switch to signup if family doesn't exist
+        _familyExists      = exists;
+        _isSignUp          = !exists;
         _showPasswordField = true;
-        _errorMessage = null;
+        _errorMessage      = null;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        _errorMessage = 'Error checking family: $e';
+        _errorMessage      = 'Error checking family: $e';
         _showPasswordField = false;
       });
     }
@@ -65,41 +77,39 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
 
   /// Handle signup for new family.
   Future<void> _handleSignUp() async {
-    final username = _familyUsernameController.text.trim();
-    final displayName = _displayNameController.text.trim();
-    final familyPassword = _familyPasswordController.text;
-    final adminPassword = _adminPasswordController.text;
+    final username      = _familyUsernameController.text.trim();
+    final displayName   = _displayNameController.text.trim();
+    final familyPwd     = _familyPasswordController.text;
+    final adminPwd      = _adminPasswordController.text;
 
-    if (username.isEmpty || familyPassword.isEmpty || adminPassword.isEmpty || displayName.isEmpty) {
+    if (username.isEmpty || familyPwd.isEmpty ||
+        adminPwd.isEmpty  || displayName.isEmpty) {
       setState(() => _errorMessage = 'Please fill all fields');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; _errorMessage = null; });
 
     try {
       await _authService.signUpFamily(
         familyUsername: username,
-        displayName: displayName,
-        familyPassword: familyPassword,
-        adminPassword: adminPassword,
+        displayName:    displayName,
+        familyPassword: familyPwd,
+        adminPassword:  adminPwd,
       );
 
-      // Sync empty family data (no members yet)
       await _firestoreService.syncFamilyData();
 
       if (mounted) {
-        // Navigate to dashboard
         Navigator.of(context).pushReplacementNamed('/persistent_dashboard');
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _isLoading    = false;
+        });
+      }
     }
   }
 
@@ -113,10 +123,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; _errorMessage = null; });
 
     try {
       await _authService.signInFamily(
@@ -124,36 +131,31 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
         familyPassword: password,
       );
 
-      // Check if user is admin
       final userRole = await _authService.userRole;
-      
-      // Only show admin verification if user is admin
+
       if (userRole == 'admin' && mounted) {
         final isAdminVerified = await _showAdminVerificationDialog();
-        
         if (!isAdminVerified) {
-          // Admin didn't verify password - downgrade to member mode
           await _authService.downgradeToMemberMode();
         }
       }
 
-      // Sync family data from Firestore
       await _firestoreService.syncFamilyData();
 
       if (mounted) {
-        // Navigate to dashboard
         Navigator.of(context).pushReplacementNamed('/persistent_dashboard');
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _isLoading    = false;
+        });
+      }
     }
   }
 
-  /// Show admin password verification dialog.
-  /// Returns true if password verified, false if skipped/cancelled.
+  /// Admin password verification dialog.
   Future<bool> _showAdminVerificationDialog() async {
     final adminPasswordCtrl = TextEditingController();
     bool obscurePassword = true;
@@ -163,7 +165,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
+        builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text(
             'Admin Verification',
@@ -174,7 +176,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'You are the admin. Enter your admin password to verify you are the admin and enable admin features.',
+                'Enter your admin password to enable admin features.',
                 style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5),
               ),
               const SizedBox(height: 20),
@@ -182,13 +184,14 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 controller: adminPasswordCtrl,
                 obscureText: obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Admin Verification Password',
+                  labelText: 'Admin Password',
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
                     icon: Icon(obscurePassword
                         ? Icons.visibility_outlined
                         : Icons.visibility_off_outlined),
-                    onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                    onPressed: () =>
+                        setDialogState(() => obscurePassword = !obscurePassword),
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -206,15 +209,18 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'If you skip this, you will use member access only.',
-                style: TextStyle(fontSize: 12, color: AppColors.grey500, fontStyle: FontStyle.italic),
+                'Skip to use member access only.',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.grey500,
+                    fontStyle: FontStyle.italic),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () {
-                result = false; // Skip admin verification
+                result = false;
                 Navigator.pop(ctx);
               },
               child: const Text('Skip (Member Mode)'),
@@ -228,11 +234,9 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                   );
                   return;
                 }
-
                 try {
-                  // Verify admin password
                   await _authService.verifyAdminPassword(adminPassword);
-                  result = true; // Admin verified
+                  result = true;
                   if (ctx.mounted) Navigator.pop(ctx);
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -266,6 +270,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 40),
+
             // Header
             const Text(
               '3elty',
@@ -273,17 +278,14 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: AppColors.teal,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const Text(
               'Family Health Management',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              style: TextStyle(fontSize: 14, color: AppColors.grey600),
             ),
             const SizedBox(height: 40),
 
@@ -294,26 +296,26 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
               decoration: InputDecoration(
                 labelText: 'Family Username',
                 hintText: 'Enter your family identifier',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 prefixIcon: const Icon(Icons.people),
               ),
-              onChanged: (_) => _checkFamilyExists(),
+              // ── FIX: was _checkFamilyExists() directly — now debounced ──────
+              onChanged: _onUsernameChanged,
             ),
             const SizedBox(height: 16),
 
-            // Display helper text
+            // Family found / new family indicator
             if (_showPasswordField)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: _familyExists ? Colors.blue.shade50 : Colors.green.shade50,
+                    color: _familyExists
+                        ? Colors.blue.shade50
+                        : Colors.green.shade50,
                     border: Border.all(
-                      color: _familyExists ? Colors.blue : Colors.green,
-                    ),
+                        color: _familyExists ? Colors.blue : Colors.green),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -328,7 +330,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 ),
               ),
 
-            // Display Name Field (Sign Up only)
+            // Display Name (sign-up only)
             if (_showPasswordField && _isSignUp)
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -338,31 +340,31 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                   decoration: InputDecoration(
                     labelText: 'Family Display Name',
                     hintText: 'e.g., "Smith Family"',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                    border:
+                        OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                     prefixIcon: const Icon(Icons.home),
                   ),
                 ),
               ),
 
-            // Family Password Field
+            // Family Password
             if (_showPasswordField)
               TextField(
                 controller: _familyPasswordController,
                 enabled: !_isLoading,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: _isSignUp ? 'Set Family Password' : 'Enter Family Password',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  labelText: _isSignUp
+                      ? 'Set Family Password'
+                      : 'Enter Family Password',
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   prefixIcon: const Icon(Icons.lock),
                 ),
               ),
             const SizedBox(height: 16),
 
-            // Admin Password Field (Sign Up only)
+            // Admin Password (sign-up only)
             if (_showPasswordField && _isSignUp)
               TextField(
                 controller: _adminPasswordController,
@@ -370,9 +372,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Set Admin Password',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                   prefixIcon: const Icon(Icons.admin_panel_settings),
                   helperText: 'Only you (the admin) will know this password',
                 ),
@@ -411,60 +412,53 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 label: Text(_isSignUp ? 'SIGN UP' : 'SIGN IN'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor:
-                      _isSignUp ? Colors.green : Colors.blue,
+                  backgroundColor: _isSignUp ? Colors.green : AppColors.teal,
                 ),
               ),
 
             const SizedBox(height: 16),
 
-            // Toggle Sign Up / Sign In
+            // Toggle sign-up / sign-in
             if (_showPasswordField)
               TextButton(
                 onPressed: _isLoading
                     ? null
-                    : () {
-                        setState(() {
+                    : () => setState(() {
                           _isSignUp = !_isSignUp;
                           _errorMessage = null;
                           _familyPasswordController.clear();
                           _adminPasswordController.clear();
                           _displayNameController.clear();
-                        });
-                      },
+                        }),
                 child: Text(
                   _isSignUp
                       ? 'Already have a family? Sign In'
                       : 'New family? Sign Up',
-                  style: const TextStyle(color: Colors.blue),
+                  style: const TextStyle(color: AppColors.teal),
                 ),
               ),
+
             const SizedBox(height: 40),
 
-            // Info Box
+            // How it works
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
+                color: AppColors.grey100,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'How it works:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                    ),
-                  ),
+                  Text('How it works:',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   SizedBox(height: 8),
                   Text(
                     '1. Enter your family username\n'
                     '2. Set up family name & admin password\n'
                     '3. Add family members\n'
                     '4. Track health records together',
-                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                    style: TextStyle(fontSize: 12, color: AppColors.grey600),
                   ),
                 ],
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/remote_auth_service.dart';
+import 'first_time_setup_screen.dart';
 
 class MemberPinLoginScreen extends StatefulWidget {
   const MemberPinLoginScreen({super.key});
@@ -10,14 +11,14 @@ class MemberPinLoginScreen extends StatefulWidget {
 
 class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
   final _phoneController = TextEditingController();
-  final _pinController = TextEditingController();
-  final _authService = RemoteAuthService();
+  final _pinController   = TextEditingController();
+  final _authService     = RemoteAuthService();
 
-  bool _isLoading = false;
+  bool    _isLoading              = false;
   String? _errorMessage;
-  int _failedAttempts = 0;
-  bool _isLocked = false;
-  int _lockoutMinutesRemaining = 0;
+  int     _failedAttempts         = 0;
+  bool    _isLocked               = false;
+  int     _lockoutMinutesRemaining = 0;
   late DateTime _lockoutExpiry;
 
   @override
@@ -27,7 +28,6 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
     super.dispose();
   }
 
-  /// Add digit to PIN (max 4 digits)
   void _addPinDigit(String digit) {
     if (_pinController.text.length < 4 && !_isLocked) {
       setState(() => _pinController.text += digit);
@@ -35,7 +35,6 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
     }
   }
 
-  /// Remove last digit from PIN
   void _removePinDigit() {
     if (_pinController.text.isNotEmpty && !_isLocked) {
       setState(() {
@@ -46,42 +45,46 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
     }
   }
 
-  /// Clear phone field
   void _clearPhone() {
     setState(() => _phoneController.clear());
     _clearError();
   }
 
-  /// Clear PIN field
   void _clearPin() {
     setState(() => _pinController.clear());
     _clearError();
   }
 
-  /// Clear error message
-  void _clearError() {
-    setState(() => _errorMessage = null);
-  }
+  void _clearError() => setState(() => _errorMessage = null);
 
-  /// Format phone number for display (remove non-digits)
+  // ── FIX 1: Normalize to +20XXXXXXXXX, strips leading 0 ───────────────────
   String _formatPhone(String phone) {
-    return phone.replaceAll(RegExp(r'\D'), '');
+    // Keep only digits
+    String digits = phone.replaceAll(RegExp(r'\D'), '');
+    // Remove leading 0  (01126... → 1126...)
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    // Remove leading 20 if user manually typed country code (201126... → 1126...)
+    if (digits.startsWith('20') && digits.length > 10) {
+      digits = digits.substring(2);
+    }
+    return '+20$digits';
   }
 
-  /// Handle PIN login attempt
+  // ── FIX 2: Check first-time before attempting PIN login ───────────────────
   Future<void> _handleLogin() async {
     if (_isLocked) {
       _showError('Account is locked. Please try again later.');
       return;
     }
 
-    final phone = _formatPhone(_phoneController.text);
-    final pin = _pinController.text;
-
-    if (phone.isEmpty || phone.length < 10) {
-      _showError('Please enter a valid phone number (at least 10 digits)');
+    final rawDigits = _phoneController.text.replaceAll(RegExp(r'\D'), '');
+    if (rawDigits.replaceAll(RegExp(r'^0+'), '').length < 9) {
+      _showError('Please enter a valid phone number');
       return;
     }
+
+    final phone = _formatPhone(_phoneController.text);
+    final pin   = _pinController.text;
 
     if (pin.isEmpty || pin.length != 4) {
       _showError('Please enter a 4-digit PIN');
@@ -91,59 +94,80 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final familyId = await _authService.signInWithPin(phone: phone, pin: pin);
+      // Step 1 — Is this phone registered by any admin in Firestore?
+      final isRegistered = await _authService.isPhoneRegisteredByAdmin(phone);
+      if (!isRegistered) {
+        _showError(
+          'This number is not registered in any family.\n'
+          'Ask your admin to add you first.',
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Step 2 — Has this phone set up a PIN on this device before?
+      final isSetUp = await isPhoneSetupOnDevice(phone);
+      if (!isSetUp) {
+        // First time ever → go to OTP + PIN setup screen
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => const FirstTimeSetupScreen(),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Step 3 — Returning user → verify PIN and sign in
+      final familyId = await _authService.signInWithPin(
+        phone: phone,
+        pin: pin,
+      );
 
       if (mounted) {
-        // Navigate to dashboard on success
-        Navigator.of(context).pushReplacementNamed('/dashboard');
+        Navigator.of(context).pushReplacementNamed(
+          '/persistent_dashboard',
+          arguments: {'familyId': familyId, 'memberPhone': phone},
+        );
       }
     } catch (e) {
       final errorMsg = e.toString().replaceFirst('Exception: ', '');
 
       if (errorMsg.contains('locked')) {
         setState(() {
-          _isLocked = true;
+          _isLocked     = true;
           _lockoutExpiry = DateTime.now().add(const Duration(minutes: 30));
           _startLockoutCountdown();
         });
       } else if (errorMsg.contains('Attempts remaining')) {
         final remaining = int.tryParse(
               errorMsg.split('Attempts remaining: ')[1].split(')').first,
-            ) ??
-            0;
-        setState(() => _failedAttempts = 3 - remaining);
+            ) ?? 0;
+        setState(() => _failedAttempts = remaining);
       }
 
       _showError(errorMsg);
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Show error message for 3 seconds
   void _showError(String message) {
     setState(() => _errorMessage = message);
     Future.delayed(const Duration(seconds: 5), () {
-      if (mounted) {
-        _clearError();
-      }
+      if (mounted) _clearError();
     });
   }
 
-  /// Start countdown timer for lockout
   void _startLockoutCountdown() {
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
-
       if (!mounted) return false;
-
       final remaining = _lockoutExpiry.difference(DateTime.now()).inMinutes;
-
       if (remaining <= 0) {
         setState(() {
-          _isLocked = false;
+          _isLocked       = false;
           _failedAttempts = 0;
           _clearPhone();
           _clearPin();
@@ -151,13 +175,11 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
         _showError('Account unlocked. You can try again.');
         return false;
       }
-
       setState(() => _lockoutMinutesRemaining = remaining);
       return true;
     });
   }
 
-  /// Build numeric keypad button
   Widget _buildKeypadButton(String digit, {VoidCallback? onPressed}) {
     return Material(
       color: Colors.transparent,
@@ -188,7 +210,6 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
     );
   }
 
-  /// Build action button (Confirm, Back, Clear)
   Widget _buildActionButton({
     required String label,
     required VoidCallback onPressed,
@@ -227,9 +248,9 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 600;
     final screenWidth = MediaQuery.of(context).size.width;
-    final padding = isMobile ? 16.0 : 32.0;
+    final isMobile    = screenWidth < 600;
+    final padding     = isMobile ? 16.0 : 32.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -249,9 +270,8 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
             children: [
               const SizedBox(height: 24),
 
-              // Title
               Text(
-                'Login with PIN',
+                'Member Login',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                       fontSize: 28,
@@ -267,8 +287,8 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Error Message (Large, High-Contrast)
-              if (_errorMessage != null)
+              // Error message
+              if (_errorMessage != null) ...[
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -282,81 +302,78 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
                   child: Text(
                     _errorMessage!,
                     style: TextStyle(
-                      color: _isLocked ? Colors.orange[900] : Colors.red[900],
+                      color: _isLocked
+                          ? Colors.orange[900]
+                          : Colors.red[900],
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                     textAlign: TextAlign.center,
                   ),
                 ),
-              if (_errorMessage != null) const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
-              // Lockout Timer (if locked)
-              if (_isLocked)
-                Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.yellow[50],
-                        border: Border.all(color: Colors.orange, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(
-                            'Account Locked',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange[900],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Try again in $_lockoutMinutesRemaining minute${_lockoutMinutesRemaining != 1 ? 's' : ''}',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.orange[700],
-                            ),
-                          ),
-                        ],
-                      ),
+              // Lockout timer
+              if (_isLocked) ...[
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.yellow[50],
+                    border: Border.all(color: Colors.orange, width: 2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(children: [
+                    Text('Account Locked',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange[900])),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Try again in $_lockoutMinutesRemaining '
+                      'minute${_lockoutMinutesRemaining != 1 ? 's' : ''}',
+                      style: TextStyle(
+                          fontSize: 16, color: Colors.orange[700]),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  ]),
                 ),
+                const SizedBox(height: 24),
+              ],
 
-              // Phone Number Input
+              // Phone field — hint now shows 1XXXXXXXXX (no leading 0)
               Container(
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.teal,
-                    width: 2,
-                  ),
+                  border: Border.all(color: Colors.teal, width: 2),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: TextField(
                   controller: _phoneController,
                   enabled: !_isLocked,
                   keyboardType: TextInputType.phone,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w600),
                   decoration: InputDecoration(
                     labelText: 'Phone Number',
-                    hintText: 'Enter 10+ digits',
+                    hintText: '1XXXXXXXXX',   // ← no leading 0
                     border: InputBorder.none,
-                    prefixIcon: Icon(
-                      Icons.phone,
-                      size: 24,
-                      color: Colors.teal[700],
+                    prefixText: '+20  ',
+                    prefixStyle: const TextStyle(
+                      color: Colors.teal,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
                     ),
+                    prefixIcon: Icon(Icons.phone,
+                        size: 24, color: Colors.teal[700]),
                     suffixIcon: _phoneController.text.isNotEmpty
                         ? IconButton(
-                            icon: Icon(Icons.clear, size: 24, color: Colors.red[700]),
+                            icon: Icon(Icons.clear,
+                                size: 24, color: Colors.red[700]),
                             onPressed: _clearPhone,
                           )
                         : null,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    contentPadding:
+                        const EdgeInsets.symmetric(vertical: 12),
                     labelStyle: const TextStyle(fontSize: 16),
                   ),
                   onChanged: (value) => setState(() {}),
@@ -364,7 +381,7 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
               ),
               const SizedBox(height: 24),
 
-              // PIN Display
+              // PIN display
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -372,76 +389,71 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
                   border: Border.all(color: Colors.teal, width: 2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Column(
-                  children: [
-                    Text(
-                      'PIN',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        4,
-                        (index) => Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 8),
-                          width: 56,
-                          height: 56,
-                          decoration: BoxDecoration(
-                            color: index < _pinController.text.length
-                                ? Colors.teal
-                                : Colors.white,
-                            border: Border.all(
-                              color: Colors.teal,
-                              width: 2,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: index < _pinController.text.length
-                                ? const Text(
-                                    '●',
-                                    style: TextStyle(
+                child: Column(children: [
+                  Text('PIN',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(
+                              fontSize: 14, color: Colors.grey[600])),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      4,
+                      (index) => Container(
+                        margin:
+                            const EdgeInsets.symmetric(horizontal: 8),
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: index < _pinController.text.length
+                              ? Colors.teal
+                              : Colors.white,
+                          border: Border.all(
+                              color: Colors.teal, width: 2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: index < _pinController.text.length
+                              ? const Text('●',
+                                  style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 24,
-                                    ),
-                                  )
-                                : null,
-                          ),
+                                      fontSize: 24))
+                              : null,
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ]),
               ),
               const SizedBox(height: 24),
 
-              // Attempt Counter (if applicable)
-              if (_failedAttempts > 0 && !_isLocked)
+              // Failed attempts counter
+              if (_failedAttempts > 0 && !_isLocked) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.orange[50],
-                    border: Border.all(color: Colors.orange, width: 1),
+                    border:
+                        Border.all(color: Colors.orange, width: 1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    'Failed attempts: $_failedAttempts/3',
+                    'Failed attempts: $_failedAttempts / 5',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.orange[900],
-                      fontWeight: FontWeight.w600,
-                    ),
+                        fontSize: 14,
+                        color: Colors.orange[900],
+                        fontWeight: FontWeight.w600),
                   ),
                 ),
-              if (_failedAttempts > 0 && !_isLocked) const SizedBox(height: 16),
+                const SizedBox(height: 16),
+              ],
 
-              // Numeric Keypad (large buttons for elderly)
+              // Keypad
               Container(
-                constraints: BoxConstraints(maxWidth: min(screenWidth - padding * 2, 320)),
+                constraints: BoxConstraints(
+                    maxWidth: _min(screenWidth - padding * 2, 320)),
                 child: GridView.count(
                   crossAxisCount: 3,
                   childAspectRatio: 1.2,
@@ -450,42 +462,41 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   children: [
-                    // Row 1: 1, 2, 3
-                    _buildKeypadButton('1', onPressed: () => _addPinDigit('1')),
-                    _buildKeypadButton('2', onPressed: () => _addPinDigit('2')),
-                    _buildKeypadButton('3', onPressed: () => _addPinDigit('3')),
-                    // Row 2: 4, 5, 6
-                    _buildKeypadButton('4', onPressed: () => _addPinDigit('4')),
-                    _buildKeypadButton('5', onPressed: () => _addPinDigit('5')),
-                    _buildKeypadButton('6', onPressed: () => _addPinDigit('6')),
-                    // Row 3: 7, 8, 9
-                    _buildKeypadButton('7', onPressed: () => _addPinDigit('7')),
-                    _buildKeypadButton('8', onPressed: () => _addPinDigit('8')),
-                    _buildKeypadButton('9', onPressed: () => _addPinDigit('9')),
-                    // Row 4: Backspace, 0, Clear
-                    _buildKeypadButton(
-                      '⌫',
-                      onPressed: _removePinDigit,
-                    ),
-                    _buildKeypadButton('0', onPressed: () => _addPinDigit('0')),
-                    _buildKeypadButton(
-                      'C',
-                      onPressed: _clearPin,
-                    ),
+                    _buildKeypadButton('1',
+                        onPressed: () => _addPinDigit('1')),
+                    _buildKeypadButton('2',
+                        onPressed: () => _addPinDigit('2')),
+                    _buildKeypadButton('3',
+                        onPressed: () => _addPinDigit('3')),
+                    _buildKeypadButton('4',
+                        onPressed: () => _addPinDigit('4')),
+                    _buildKeypadButton('5',
+                        onPressed: () => _addPinDigit('5')),
+                    _buildKeypadButton('6',
+                        onPressed: () => _addPinDigit('6')),
+                    _buildKeypadButton('7',
+                        onPressed: () => _addPinDigit('7')),
+                    _buildKeypadButton('8',
+                        onPressed: () => _addPinDigit('8')),
+                    _buildKeypadButton('9',
+                        onPressed: () => _addPinDigit('9')),
+                    _buildKeypadButton('⌫',
+                        onPressed: _removePinDigit),
+                    _buildKeypadButton('0',
+                        onPressed: () => _addPinDigit('0')),
+                    _buildKeypadButton('C', onPressed: _clearPin),
                   ],
                 ),
               ),
               const SizedBox(height: 24),
 
-              // Confirm Button
               _buildActionButton(
-                label: _isLoading ? 'Logging in...' : 'Confirm',
+                label: _isLoading ? 'Checking...' : 'Confirm',
                 onPressed: _isLoading ? () {} : _handleLogin,
                 backgroundColor: Colors.teal,
               ),
               const SizedBox(height: 12),
 
-              // Back to Family Login Button
               _buildActionButton(
                 label: 'Back to Family Login',
                 onPressed: () => Navigator.of(context).pop(),
@@ -500,4 +511,4 @@ class _MemberPinLoginScreenState extends State<MemberPinLoginScreen> {
   }
 }
 
-double min(double a, double b) => a < b ? a : b;
+double _min(double a, double b) => a < b ? a : b;
