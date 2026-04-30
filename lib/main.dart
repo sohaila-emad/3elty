@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'services/notification_helper.dart';
+import 'services/report_service.dart';
 import 'modules/food_safety_screen.dart';
 import 'modules/pregnancy_medications_screen.dart';
 import 'modules/ultrasound_log_screen.dart';
@@ -531,12 +532,42 @@ class _AuthWrapperState extends State<_AuthWrapper> {
 // ═══════════════════════════════════════════════════════════════════════════════
 // SCREEN — MEMBER PROFILE HUB
 // ═══════════════════════════════════════════════════════════════════════════════
-class MemberProfileScreen extends StatelessWidget {
+class MemberProfileScreen extends StatefulWidget {
   final FamilyMember member;
   const MemberProfileScreen({super.key, required this.member});
 
   @override
+  State<MemberProfileScreen> createState() => _MemberProfileScreenState();
+}
+
+class _MemberProfileScreenState extends State<MemberProfileScreen> {
+  bool _generatingReport = false;
+
+  Future<void> _generateReport() async {
+    if (widget.member.id == null) return;
+    setState(() => _generatingReport = true);
+    try {
+      await ReportService.instance.generateAndShare(
+        member: widget.member,
+        memberId: widget.member.id!,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        backgroundColor: AppColors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        content: Text('تعذّر إنشاء التقرير: $e',
+            style: const TextStyle(color: Colors.white)),
+      ));
+    } finally {
+      if (mounted) setState(() => _generatingReport = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final member  = widget.member;
     final t       = member.profileType;
     final modules = modulesFor(t);
 
@@ -556,6 +587,21 @@ class MemberProfileScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(context),
             ),
             actions: [
+              // ── زر إنشاء تقرير PDF ─────────────────────────────────────
+              _generatingReport
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: AppColors.teal),
+                      ),
+                    )
+                  : IconButton(
+                      icon: const Icon(Icons.picture_as_pdf_rounded),
+                      tooltip: 'إنشاء تقرير PDF',
+                      onPressed: _generateReport,
+                    ),
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
                 onPressed: () {},
@@ -621,6 +667,7 @@ class MemberProfileScreen extends StatelessWidget {
   }
 
   void _onModuleTap(BuildContext context, HealthModule module) {
+      final member = widget.member;
       Widget screen;
       
       switch (module.id) {
