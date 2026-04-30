@@ -9,6 +9,18 @@
         android:maxSdkVersion="32"/>
     <!-- Android 13+ notification permission -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- ── أذونات رفع الملفات والكاميرا ─────────────────────────────────── -->
+    <!-- الكاميرا: للتصوير المباشر -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <!-- التخزين: للوصول إلى الملفات (Android 12 وأقل) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"/>
+    <!-- التخزين: للوصول إلى الصور والفيديو (Android 13+) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <application
         android:label="flutter_application_1"
         android:name="${applicationName}"

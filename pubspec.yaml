@@ -22,6 +22,10 @@ dependencies:
   timezone: ^0.9.4
   flutter_local_notifications: ^17.2.4
 
+  # File picking & opening
+  file_picker: ^8.1.2
+  open_filex: ^4.5.0
+
   # Firebase
   firebase_core: ^2.24.0
   cloud_firestore: ^4.13.0
