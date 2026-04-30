@@ -5,40 +5,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../services/remote_auth_service.dart';
+import '../utils/auth_helpers.dart';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-const String _kPinPrefix        = 'member_pin_';       // secure storage
-const String _kLoginCountPrefix = 'login_count_';     // shared prefs
-const int    _kPinPromptEvery   = 10;                 // ask PIN every N logins
-
-// ─── Helper: check if this phone is already set up on this device ─────────────
-Future<bool> isPhoneSetupOnDevice(String phone) async {
-  final storage = const FlutterSecureStorage();
-  final pin = await storage.read(key: '$_kPinPrefix$phone');
-  return pin != null;
-}
-
-// ─── Helper: get + increment login count, return whether PIN is needed ────────
-Future<bool> shouldAskPinThisLogin(String phone) async {
-  final prefs = await SharedPreferences.getInstance();
-  final key   = '$_kLoginCountPrefix$phone';
-  final count = (prefs.getInt(key) ?? 0) + 1;
-  await prefs.setInt(key, count);
-  // Ask PIN on the 1st login (always) and every _kPinPromptEvery after that
-  return count == 1 || count % _kPinPromptEvery == 0;
-}
-
-// ─── Helper: read stored PIN ──────────────────────────────────────────────────
-Future<String?> getStoredPin(String phone) async {
-  final storage = const FlutterSecureStorage();
-  return storage.read(key: '$_kPinPrefix$phone');
-}
-
-// ─── Helper: save PIN ─────────────────────────────────────────────────────────
-Future<void> savePin(String phone, String pin) async {
-  final storage = const FlutterSecureStorage();
-  await storage.write(key: '$_kPinPrefix$phone', value: pin);
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SCREEN: First-Time Setup  (phone → OTP → set PIN)
@@ -66,6 +34,7 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
   int?   _resendToken;
   int    _resendCountdown = 0;
   Timer? _resendTimer;
+  String? _userId;  // ← Store userId from OTP verification for PIN setup
 
   @override
   void dispose() {
@@ -86,7 +55,7 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
     }
 
     // Format to E.164 if not already (assume Egypt +20)
-    final formatted = phone.startsWith('+') ? phone : '+20$phone';
+    final formatted = normalizePhoneNumber(phone);
 
     setState(() { _isLoading = true; _error = null; });
 
@@ -160,6 +129,12 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
   Future<void> _signInWithCredential(PhoneAuthCredential credential) async {
     try {
       await _auth.signInWithCredential(credential);
+      
+      // Create Firestore user document for this member
+      // (links phone to family_id for subsequent PIN setup)
+      final phone = normalizePhoneNumber(_phoneCtrl.text.trim());
+      _userId = await _remoteAuth.createMemberUserByPhone(phone: phone);
+      
       // OTP verified — move to PIN setup
       if (mounted) setState(() { _step = 2; _isLoading = false; });
     } catch (e) {
@@ -185,14 +160,14 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
     setState(() { _isLoading = true; _error = null; });
 
     try {
-      final phone = _normalizePhone(_phoneCtrl.text.trim());
+      final phone = normalizePhoneNumber(_phoneCtrl.text.trim());
 
       // Save PIN locally on device
       await savePin(phone, pin1);
 
-      // Also store PIN hash in Firestore via RemoteAuthService
+      // Store PIN hash in Firestore using userId (avoids Firestore consistency issues)
       await _remoteAuth.setupMemberPinByPhone(
-        phone: phone,
+        userId: _userId,
         pin: pin1,
       );
 
@@ -201,6 +176,9 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
         phone: phone,
         pin: pin1,
       );
+
+      // Mark PIN as verified for this session
+      await markPinVerifiedThisSession(phone);
 
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed(
@@ -227,9 +205,6 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
   }
 
   void _setError(String msg) => setState(() => _error = msg);
-
-  String _normalizePhone(String phone) =>
-      phone.startsWith('+') ? phone : '+20$phone';
 
   // ── Build ────────────────────────────────────────────────────────────────────
   @override
@@ -304,7 +279,7 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         decoration: InputDecoration(
           labelText: 'Phone Number',
-          hintText: '01XXXXXXXXX',
+          hintText: '1XXXXXXXXX',
           prefixIcon: const Icon(Icons.phone_rounded),
           prefixText: '+20  ',
           prefixStyle: const TextStyle(
@@ -402,142 +377,6 @@ class _FirstTimeSetupScreenState extends State<FirstTimeSetupScreen> {
       ),
     ],
   );
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SCREEN: PIN Check  (shown every 10 logins)
-// ═══════════════════════════════════════════════════════════════════════════════
-class PinCheckScreen extends StatefulWidget {
-  final String phone;
-  final String familyId;
-  const PinCheckScreen({
-    super.key,
-    required this.phone,
-    required this.familyId,
-  });
-
-  @override
-  State<PinCheckScreen> createState() => _PinCheckScreenState();
-}
-
-class _PinCheckScreenState extends State<PinCheckScreen> {
-  final _pinCtrl     = TextEditingController();
-  bool  _isLoading   = false;
-  String? _error;
-  int   _attempts    = 0;
-
-  @override
-  void dispose() {
-    _pinCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _checkPin() async {
-    final entered = _pinCtrl.text;
-    if (entered.length != 4) {
-      setState(() => _error = 'Please enter your 4-digit PIN');
-      return;
-    }
-
-    setState(() { _isLoading = true; _error = null; });
-
-    final stored = await getStoredPin(widget.phone);
-    if (stored == entered) {
-      if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed(
-        '/persistent_dashboard',
-        arguments: {
-          'familyId': widget.familyId,
-          'memberPhone': widget.phone,
-        },
-      );
-    } else {
-      _attempts++;
-      setState(() {
-        _isLoading = false;
-        _error = _attempts >= 3
-            ? 'Too many wrong attempts. Please try again later.'
-            : 'Incorrect PIN. ${3 - _attempts} attempt(s) remaining.';
-      });
-      _pinCtrl.clear();
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: const BoxDecoration(
-                  color: AppColors.tealLight,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.lock_rounded,
-                  size: 48,
-                  color: AppColors.teal,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Security Check',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.grey900,
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Please enter your PIN to continue',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: AppColors.grey600),
-              ),
-              const SizedBox(height: 40),
-              _PinInputField(controller: _pinCtrl, label: 'Enter PIN'),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _isLoading || _attempts >= 3 ? null : _checkPin,
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20, width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                    : const Text('Continue'),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.redLight,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    _error!,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.red,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 // ─── Shared small widgets ──────────────────────────────────────────────────────

@@ -491,55 +491,120 @@ class RemoteAuthService {
   /// Used by FirstTimeSetupScreen before sending OTP.
   Future<bool> isPhoneRegisteredByAdmin(String phone) async {
     try {
+      // Check members collection (where admin adds new members)
+      final memberResult = await _firestore
+          .collection('members')
+          .where('phone', isEqualTo: phone.trim())
+          .limit(1)
+          .get();
+      if (memberResult.docs.isNotEmpty) return true;
+
+      // Also check users collection (for members who already set up PIN)
+      final userResult = await _firestore
+          .collection('users')
+          .where('phone', isEqualTo: phone.trim())
+          .limit(1)
+          .get();
+      return userResult.docs.isNotEmpty;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Get family ID for a phone number (from member record created by admin)
+  /// Used during first-time setup to create user document
+  Future<String?> getFamilyIdByPhone(String phone) async {
+    try {
+      final result = await _firestore
+          .collection('members')
+          .where('phone', isEqualTo: phone.trim())
+          .limit(1)
+          .get();
+      if (result.docs.isEmpty) return null;
+      return result.docs.first['family_id'] as String?;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Check if a member has set up their PIN (pin_hash exists in Firestore)
+  Future<bool> hasMemberSetPin(String phone) async {
+    try {
       final result = await _firestore
           .collection('users')
           .where('phone', isEqualTo: phone.trim())
           .limit(1)
           .get();
-      return result.docs.isNotEmpty;
+      if (result.docs.isEmpty) return false;
+      
+      final userData = result.docs.first.data();
+      final pinHash = userData['pin_hash'] as String?;
+      return pinHash != null && pinHash.isNotEmpty;
     } catch (e) {
       return false;
     }
   }
-  
-  /// Save PIN hash to the members document identified by phone number.
-  /// Called after OTP is verified and user sets their PIN.
-  Future<void> setupMemberPinByPhone({
+
+  /// Create a user document in Firestore for a member during first-time OTP setup
+  /// This links the Firebase Auth phone to a Firestore user with pin_hash later
+  Future<String> createMemberUserByPhone({
     required String phone,
+  }) async {
+    try {
+      final familyId = await getFamilyIdByPhone(phone);
+      if (familyId == null) {
+        throw Exception('Phone number not registered by admin');
+      }
+
+      final userRef = _firestore.collection('users').doc();
+      await userRef.set({
+        'phone': phone.trim(),
+        'family_id': familyId,
+        'role': 'member',
+        'is_active': true,
+        'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
+      });
+
+      return userRef.id;
+    } catch (e) {
+      throw Exception('Failed to create member user: $e');
+    }
+  }
+  
+  /// Save PIN hash to the user document identified by phone number.
+  /// Called after OTP is verified and user sets their PIN.
+  /// The user document should already exist (created by createMemberUserByPhone)
+  /// 
+  /// [userId] - Optional: if provided, uses this directly (avoids query race condition)
+  /// [phone] - Required if userId not provided
+  Future<void> setupMemberPinByPhone({
+    String? userId,
+    String? phone,
     required String pin,
   }) async {
-    final result = await _firestore
-        .collection('users')
-        .where('phone', isEqualTo: phone.trim())
-        .limit(1)
-        .get();
-  
-    if (result.docs.isEmpty) {
-      throw Exception('No member found with this phone number');
+    String finalUserId = userId ?? '';
+    
+    // If userId not provided, query by phone
+    if (finalUserId.isEmpty && phone != null) {
+      final result = await _firestore
+          .collection('users')
+          .where('phone', isEqualTo: phone.trim())
+          .limit(1)
+          .get();
+    
+      if (result.docs.isEmpty) {
+        throw Exception('No member user found with this phone number. Please contact your admin.');
+      }
+      finalUserId = result.docs.first.id;
+    } else if (finalUserId.isEmpty) {
+      throw Exception('Either userId or phone must be provided');
     }
   
-    final memberId = result.docs.first.id;
-    await _firestore.collection('members').doc(memberId).update({
+    await _firestore.collection('users').doc(finalUserId).update({
       'pin_hash':   _hashPassword(pin),
       'pin_set_at': FieldValue.serverTimestamp(),
     });
-  
-    // Also update users collection if a user doc exists for this member
-    final userResult = await _firestore
-        .collection('users')
-        .where('phone', isEqualTo: phone.trim())
-        .limit(1)
-        .get();
-  
-    if (userResult.docs.isNotEmpty) {
-      await _firestore
-          .collection('users')
-          .doc(userResult.docs.first.id)
-          .update({
-        'pin_hash':   _hashPassword(pin),
-        'pin_set_at': FieldValue.serverTimestamp(),
-      });
-    }
   }
   // ── Private helpers ────────────────────────────────────────────────────────
 

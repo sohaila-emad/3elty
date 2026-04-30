@@ -6,6 +6,7 @@ import 'services/firestore_service.dart';
 import 'main.dart';
 import 'data/app_repository.dart';
 import 'utils/error_handler.dart';
+import 'screens/first_time_setup_screen.dart';
 
 class FamilyDashboard extends StatefulWidget {
   const FamilyDashboard({super.key});
@@ -263,12 +264,10 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                 ),
               );
               if (confirmed == true) {
-                await RemoteAuthService().signOut();
+                await AuthService.instance.signOut();
+                await RemoteAuthService.instance.signOut(); // ← clears secure storage tokens
                 if (!mounted) return;
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  '/login',
-                  (_) => false,
-                );
+                Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
               }
             },
           ),
@@ -360,12 +359,34 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
             final member = _members[i];
             return _MemberCard(
               member: member,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => MemberProfileScreen(member: member),
-                ),
-              ),
+              onTap: () async {
+                final phone = member.phone ?? '';
+                print('DEBUG phone: "$phone"');
+                print('DEBUG member.name: "${member.name}"');
+                if (phone.isNotEmpty) {
+                  final hasPin = await _authService.hasMemberSetPin(phone);
+                  print('DEBUG hasPin: $hasPin');
+                  if (!hasPin) {
+                    if (context.mounted) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const FirstTimeSetupScreen(),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+                }
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => MemberProfileScreen(member: member),
+                    ),
+                  );
+                }
+              },
               onLongPress: () => _confirmDeleteMember(member),
             );
           },

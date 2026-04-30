@@ -3,6 +3,7 @@ import '../main.dart';
 import '../data/app_repository.dart';
 import '../services/firestore_service.dart';
 import '../services/remote_auth_service.dart';
+import '../utils/auth_helpers.dart';
 
 class AdminMemberManagementScreen extends StatefulWidget {
   const AdminMemberManagementScreen({super.key});
@@ -105,7 +106,7 @@ class _AdminMemberManagementScreenState
                 keyboardType: TextInputType.phone,
                 decoration: InputDecoration(
                   labelText: 'Phone Number',
-                  hintText: '01XXXXXXXXX',
+                  hintText: '1XXXXXXXXX',
                   prefixIcon: const Icon(Icons.phone_rounded),
                   prefixText: '+20  ',
                   prefixStyle: const TextStyle(
@@ -194,8 +195,8 @@ class _AdminMemberManagementScreenState
       return;
     }
 
-    // Normalize phone
-    final normalizedPhone = phone.startsWith('+') ? phone : '+20$phone';
+    // Normalize phone using unified formatter
+    final normalizedPhone = normalizePhoneNumber(phone);
 
     try {
       await _firestoreService.addFamilyMember(
@@ -216,8 +217,9 @@ class _AdminMemberManagementScreenState
 
   // ── Edit member sheet ───────────────────────────────────────────────────────
   Future<void> _showEditMemberDialog(FamilyMember member) async {
-    final nameCtrl = TextEditingController(text: member.name);
-    final ageCtrl  = TextEditingController(text: member.age.toString());
+    final nameCtrl  = TextEditingController(text: member.name);
+    final ageCtrl   = TextEditingController(text: member.age.toString());
+    final phoneCtrl = TextEditingController(text: member.phone ?? '');
     ProfileType selectedType = member.profileType;
 
     showModalBottomSheet(
@@ -260,6 +262,17 @@ class _AdminMemberManagementScreenState
                 ),
               ),
               const SizedBox(height: 16),
+              TextFormField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  hintText: '1XXXXXXXXX',
+                  prefixText: '+20  ',
+                  prefixIcon: Icon(Icons.phone_rounded),
+                ),
+              ),
+              const SizedBox(height: 16),
               const Text(
                 'Profile Type',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
@@ -297,6 +310,7 @@ class _AdminMemberManagementScreenState
                   nameCtrl.text.trim(),
                   ageCtrl.text.trim(),
                   selectedType,
+                  phoneCtrl.text.trim(),
                 ),
                 child: const Text('Update Member'),
               ),
@@ -313,6 +327,7 @@ class _AdminMemberManagementScreenState
     String name,
     String ageText,
     ProfileType type,
+    String phone,
   ) async {
     if (name.isEmpty || ageText.isEmpty) {
       _showError('Please fill all fields');
@@ -323,12 +338,14 @@ class _AdminMemberManagementScreenState
       _showError('Please enter a valid age');
       return;
     }
+    final normalizedPhone = phone.isNotEmpty ? normalizePhoneNumber(phone) : null;
     try {
       await _firestoreService.updateFamilyMember(
         memberId: memberId,
         name: name,
         age: age,
         profileType: type.name,
+        phone: normalizedPhone,
       );
       if (!mounted) return;
       Navigator.pop(sheetCtx);

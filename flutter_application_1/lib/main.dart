@@ -15,6 +15,8 @@ import 'modules/documents_screen.dart';
 import 'modules/vaccinations_screen.dart';
 import 'modules/growth_tracking_screen.dart';
 import 'screens/first_time_setup_screen.dart';
+import 'screens/pin_check_screen.dart';
+import 'utils/auth_helpers.dart';
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
 class AppColors {
@@ -924,6 +926,7 @@ class _AuthWrapperState extends State<_AuthWrapper> {
   @override
   void initState() {
     super.initState();
+    resetSessionPinVerification();  // ← Reset session flags on app startup (new session)
     _resolve();
   }
 
@@ -935,11 +938,16 @@ class _AuthWrapperState extends State<_AuthWrapper> {
     if (isSignedIn && role == 'admin') {
       dest = const FamilyDashboard();
     } else if (isSignedIn && role == 'member') {
-      final userId = await _authService.userId ?? '';
       final familyId = await _authService.familyId ?? '';
-      final shouldAsk = await shouldAskPinThisLogin(userId);
-      if (shouldAsk) {
-        dest = PinCheckScreen(phone: userId, familyId: familyId);
+      final userDoc  = await _authService.getCurrentUser();
+      final phone    = userDoc?['phone'] as String? ?? '';
+      
+      // NEW: Check if PIN exists in Firestore AND hasn't been verified THIS session
+      final hasPinSet = await _authService.hasMemberSetPin(phone);
+      final pinVerifiedThisSession = await hasPinBeenVerifiedThisSession(phone);
+      
+      if (hasPinSet && !pinVerifiedThisSession && phone.isNotEmpty) {
+        dest = PinCheckScreen(phone: phone, familyId: familyId);
       } else {
         dest = const FamilyDashboard();
       }

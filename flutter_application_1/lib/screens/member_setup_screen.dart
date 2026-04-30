@@ -96,6 +96,13 @@ class _MemberSetupScreenState extends State<MemberSetupScreen> {
   Future<void> _setupMember() async {
     // Clear previous errors
     setState(() => _errorMessage = null);
+    // Guard: phone must be verified first
+    if (!_phoneVerified) {
+      setState(() => _errorMessage = 'Please verify your phone number first.');
+      return;
+    }
+
+    // Validate PIN
 
     // Validate PIN
     if (_pinController.text.isEmpty) {
@@ -248,7 +255,7 @@ class _MemberSetupScreenState extends State<MemberSetupScreen> {
             const SizedBox(height: 8),
             TextField(
               controller: _phoneController,
-              enabled: !_loading,
+              enabled: !_loading && !_phoneVerified,
               keyboardType: TextInputType.phone,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               maxLength: 10,
@@ -271,118 +278,135 @@ class _MemberSetupScreenState extends State<MemberSetupScreen> {
                 counterText: '',
               ),
             ),
-            const SizedBox(height: 20),
-            // PIN input
-            Text(
-              'Create a 4-Digit PIN',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.grey900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _pinController,
-              enabled: !_loading,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              maxLength: 4,
-              obscureText: !_showPin,
-              decoration: InputDecoration(
-                hintText: '••••',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.grey200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.grey200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.teal, width: 2),
-                ),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _showPin ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                    color: AppColors.grey600,
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  side: BorderSide(
+                    color: _phoneVerified ? AppColors.teal : AppColors.grey200,
                   ),
-                  onPressed: () => setState(() => _showPin = !_showPin),
-                ),
-                counterText: '',
-              ),
-            ),
-            const SizedBox(height: 20),
-            // PIN confirmation input
-            Text(
-              'Confirm PIN',
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.grey900,
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _pinConfirmController,
-              enabled: !_loading,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              maxLength: 4,
-              obscureText: !_showPin,
-              decoration: InputDecoration(
-                hintText: '••••',
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.grey200),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.grey200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.teal, width: 2),
-                ),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _showPin ? Icons.visibility_rounded : Icons.visibility_off_rounded,
-                    color: AppColors.grey600,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  onPressed: () => setState(() => _showPin = !_showPin),
                 ),
-                counterText: '',
-              ),
-            ),
-            // Error message
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppColors.redLight,
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                onPressed: _phoneVerified || _loading ? null : _verifyPhone,
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.error_outline, color: AppColors.red, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.red,
-                          fontWeight: FontWeight.w500,
-                        ),
+                    if (_phoneVerified)
+                      const Icon(Icons.check_circle_rounded,
+                          color: AppColors.teal, size: 18),
+                    if (_phoneVerified) const SizedBox(width: 6),
+                    Text(
+                      _phoneVerified ? 'Phone Verified' : 'Verify Phone',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: _phoneVerified
+                            ? AppColors.teal
+                            : AppColors.grey600,
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+           // PIN fields — only shown after phone verified
+            if (_phoneVerified) ...[
+              // PIN input
+              Text(
+                'Create a 4-Digit PIN',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.grey900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _pinController,
+                enabled: !_loading,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 4,
+                obscureText: !_showPin,
+                decoration: InputDecoration(
+                  hintText: '••••',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: AppColors.teal, width: 2),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPin
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      color: AppColors.grey600,
+                    ),
+                    onPressed: () => setState(() => _showPin = !_showPin),
+                  ),
+                  counterText: '',
+                ),
+              ),
+              const SizedBox(height: 20),
+              // PIN confirmation input
+              Text(
+                'Confirm PIN',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.grey900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _pinConfirmController,
+                enabled: !_loading,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                maxLength: 4,
+                obscureText: !_showPin,
+                decoration: InputDecoration(
+                  hintText: '••••',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: AppColors.grey200),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide:
+                        const BorderSide(color: AppColors.teal, width: 2),
+                  ),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _showPin
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      color: AppColors.grey600,
+                    ),
+                    onPressed: () => setState(() => _showPin = !_showPin),
+                  ),
+                  counterText: '',
                 ),
               ),
             ],

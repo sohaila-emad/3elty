@@ -247,6 +247,7 @@ class FirestoreService {
     required String name,
     required int age,
     required String profileType,
+    String? phone,
   }) async {
     try {
       final canEdit = await _permissionService.canEditMember();
@@ -256,6 +257,7 @@ class FirestoreService {
         'name': name.trim(),
         'age': age,
         'profile_type': profileType,
+        if (phone != null) 'phone': phone,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
@@ -264,6 +266,7 @@ class FirestoreService {
         'name': name.trim(),
         'age': age,
         'profile_type': profileType,
+        if (phone != null) 'phone': phone,
       });
     } catch (e) {
       throw Exception('Failed to update member: $e');
