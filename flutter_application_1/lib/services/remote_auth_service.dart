@@ -154,27 +154,31 @@ class RemoteAuthService {
     }
   }
 
-  /// Sign in as a family member using phone + PIN.
   Future<String> signInWithPin({
     required String phone,
     required String pin,
   }) async {
-    final query = await _firestore
+    final currentFamilyId = await familyId; // ← ADD THIS
+    if (currentFamilyId == null) throw Exception('No active family session.');
+
+    final result = await _firestore
         .collection('users')
         .where('phone', isEqualTo: phone.trim())
+        .where('family_id', isEqualTo: currentFamilyId)
+        .where('role', isEqualTo: 'member')
         .limit(1)
         .get();
 
-    if (query.docs.isEmpty) {
+    if (result.docs.isEmpty) {
       throw Exception('No account found for this phone number.');
     }
 
-    final userDoc = query.docs.first;
+    final userDoc = result.docs.first;
     final data = userDoc.data();
     final userId = userDoc.id;
-    final familyId = data['family_id'] as String?;
+    final linkedFamilyId = data['family_id'] as String?; // ← renamed to avoid conflict
 
-    if (familyId == null) throw Exception('Account not linked to a family.');
+    if (linkedFamilyId == null) throw Exception('Account not linked to a family.');
 
     // Check lockout
     final lockedUntil = data['locked_until'] as String?;
@@ -211,11 +215,10 @@ class RemoteAuthService {
       'last_login': FieldValue.serverTimestamp(),
     });
 
-    final token = _generateToken(userId, familyId, 'member');
-    await _storeTokens(token, familyId, userId, 'member');
-    return familyId;
+    final token = _generateToken(userId, linkedFamilyId, 'member');
+    await _storeTokens(token, linkedFamilyId, userId, 'member');
+    return linkedFamilyId;
   }
-
   /// Sign in as a member using family username + member username + password.
   Future<String> signInMember({
     required String familyUsername,
@@ -491,18 +494,24 @@ class RemoteAuthService {
   /// Used by FirstTimeSetupScreen before sending OTP.
   Future<bool> isPhoneRegisteredByAdmin(String phone) async {
     try {
+      final currentFamilyId = await familyId; // await the getter
+      if (currentFamilyId == null) return false;
+
       // Check members collection (where admin adds new members)
       final memberResult = await _firestore
           .collection('members')
           .where('phone', isEqualTo: phone.trim())
+          .where('family_id', isEqualTo: currentFamilyId)
           .limit(1)
           .get();
       if (memberResult.docs.isNotEmpty) return true;
 
-      // Also check users collection (for members who already set up PIN)
+      // Also check users collection (members who already set up PIN)
       final userResult = await _firestore
           .collection('users')
           .where('phone', isEqualTo: phone.trim())
+          .where('family_id', isEqualTo: currentFamilyId) // ← same filter
+          .where('role', isEqualTo: 'member')              // ← role filter here
           .limit(1)
           .get();
       return userResult.docs.isNotEmpty;
