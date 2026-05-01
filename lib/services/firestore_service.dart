@@ -149,33 +149,36 @@ class FirestoreService {
     required String name,
     required int age,
     required String profileType,
+    String? phone,                    // ← NEW optional param
   }) async {
     try {
       final canAdd = await _permissionService.canAddMember();
       if (!canAdd) throw Exception('Only admins can add family members');
-
+  
       final familyId = await _authService.familyId;
       if (familyId == null) throw Exception('No active family session');
-
+  
       final memberRef = _firestore.collection('members').doc();
       await memberRef.set({
-        'family_id': familyId,
-        'name': name.trim(),
-        'age': age,
+        'family_id':    familyId,
+        'name':         name.trim(),
+        'age':          age,
         'profile_type': profileType,
-        'user_id': null,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
+        'phone':        phone,          // ← NEW: stored so OTP can verify it
+        'user_id':      null,
+        'created_at':   FieldValue.serverTimestamp(),
+        'updated_at':   FieldValue.serverTimestamp(),
       });
-
+  
       await _repository.addMember({
-        'id': memberRef.id,
-        'family_id': familyId,
-        'name': name.trim(),
-        'age': age,
+        'id':           memberRef.id,
+        'family_id':    familyId,
+        'name':         name.trim(),
+        'age':          age,
         'profile_type': profileType,
+        'phone':        phone,          // ← NEW
       });
-
+  
       return memberRef.id;
     } catch (e) {
       throw Exception('Failed to add family member: $e');
@@ -244,6 +247,7 @@ class FirestoreService {
     required String name,
     required int age,
     required String profileType,
+    String? phone,
   }) async {
     try {
       final canEdit = await _permissionService.canEditMember();
@@ -253,6 +257,7 @@ class FirestoreService {
         'name': name.trim(),
         'age': age,
         'profile_type': profileType,
+        if (phone != null) 'phone': phone,
         'updated_at': FieldValue.serverTimestamp(),
       });
 
@@ -261,6 +266,7 @@ class FirestoreService {
         'name': name.trim(),
         'age': age,
         'profile_type': profileType,
+        if (phone != null) 'phone': phone,
       });
     } catch (e) {
       throw Exception('Failed to update member: $e');

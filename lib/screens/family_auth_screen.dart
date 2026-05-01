@@ -6,7 +6,7 @@ import '../main.dart';
 /// Screen for family signup/signin.
 /// First step of app authentication flow.
 class FamilyAuthScreen extends StatefulWidget {
-  const FamilyAuthScreen({Key? key}) : super(key: key);
+  const FamilyAuthScreen({super.key});
 
   @override
   State<FamilyAuthScreen> createState() => _FamilyAuthScreenState();
@@ -57,7 +57,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
       });
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error checking family: $e';
+        _errorMessage = 'خطأ في التحقق من العائلة: $e';
         _showPasswordField = false;
       });
     }
@@ -71,7 +71,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
     final adminPassword = _adminPasswordController.text;
 
     if (username.isEmpty || familyPassword.isEmpty || adminPassword.isEmpty || displayName.isEmpty) {
-      setState(() => _errorMessage = 'Please fill all fields');
+      setState(() => _errorMessage = 'من فضلك أكمل جميع الحقول');
       return;
     }
 
@@ -109,7 +109,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
     final password = _familyPasswordController.text;
 
     if (username.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'Please fill all fields');
+      setState(() => _errorMessage = 'من فضلك أكمل جميع الحقول');
       return;
     }
 
@@ -166,7 +166,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
         builder: (context, setState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: const Text(
-            'Admin Verification',
+            'التحقق من المسؤول',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           content: Column(
@@ -174,7 +174,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'You are the admin. Enter your admin password to verify you are the admin and enable admin features.',
+                'أنت المسؤول. أدخل كلمة مرور المسؤول لتفعيل صلاحيات الإدارة.',
                 style: TextStyle(fontSize: 14, color: AppColors.grey600, height: 1.5),
               ),
               const SizedBox(height: 20),
@@ -182,7 +182,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 controller: adminPasswordCtrl,
                 obscureText: obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Admin Verification Password',
+                  labelText: 'كلمة مرور المسؤول',
                   prefixIcon: const Icon(Icons.lock_outline_rounded),
                   suffixIcon: IconButton(
                     icon: Icon(obscurePassword
@@ -206,7 +206,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'If you skip this, you will use member access only.',
+                'إذا تخطيت هذه الخطوة، ستستخدم صلاحيات الأعضاء فقط.',
                 style: TextStyle(fontSize: 12, color: AppColors.grey500, fontStyle: FontStyle.italic),
               ),
             ],
@@ -217,14 +217,14 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 result = false; // Skip admin verification
                 Navigator.pop(ctx);
               },
-              child: const Text('Skip (Member Mode)'),
+              child: const Text('تخطي (وضع العضو)'),
             ),
             ElevatedButton(
               onPressed: () async {
                 final adminPassword = adminPasswordCtrl.text;
                 if (adminPassword.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Please enter admin password')),
+                    const SnackBar(content: Text('من فضلك أدخل كلمة مرور المسؤول')),
                   );
                   return;
                 }
@@ -237,13 +237,13 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Invalid password: $e'),
+                      content: Text('كلمة المرور غير صحيحة'),
                       backgroundColor: AppColors.red,
                     ),
                   );
                 }
               },
-              child: const Text('Verify'),
+              child: const Text('تحقق'),
             ),
           ],
         ),
@@ -257,7 +257,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Family Authentication'),
+        title: const Text('تسجيل الدخول للعائلة'),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -278,7 +278,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
             ),
             const SizedBox(height: 20),
             const Text(
-              'Family Health Management',
+              'إدارة الصحة الأسرية',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -292,8 +292,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
               controller: _familyUsernameController,
               enabled: !_isLoading,
               decoration: InputDecoration(
-                labelText: 'Family Username',
-                hintText: 'Enter your family identifier',
+                labelText: 'اسم مستخدم العائلة',
+                hintText: 'أدخل معرّف عائلتك',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -318,8 +318,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                   ),
                   child: Text(
                     _familyExists
-                        ? 'Family found! Please sign in.'
-                        : 'New family! Proceeding with setup.',
+                        ? 'تم العثور على العائلة! سجّل دخولك.'
+                        : 'عائلة جديدة! سنكمل إعداد الحساب.',
                     style: TextStyle(
                       color: _familyExists ? Colors.blue : Colors.green,
                       fontSize: 13,
@@ -336,8 +336,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                   controller: _displayNameController,
                   enabled: !_isLoading,
                   decoration: InputDecoration(
-                    labelText: 'Family Display Name',
-                    hintText: 'e.g., "Smith Family"',
+                    labelText: 'اسم العائلة',
+                    hintText: 'مثال: عائلة محمد',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -353,7 +353,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 enabled: !_isLoading,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: _isSignUp ? 'Set Family Password' : 'Enter Family Password',
+                  labelText: _isSignUp ? 'كلمة مرور العائلة' : 'أدخل كلمة مرور العائلة',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -369,12 +369,12 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 enabled: !_isLoading,
                 obscureText: true,
                 decoration: InputDecoration(
-                  labelText: 'Set Admin Password',
+                  labelText: 'كلمة مرور المسؤول',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
                   prefixIcon: const Icon(Icons.admin_panel_settings),
-                  helperText: 'Only you (the admin) will know this password',
+                  helperText: 'فقط المسؤول يعرف هذه الكلمة',
                 ),
               ),
             const SizedBox(height: 24),
@@ -408,7 +408,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(_isSignUp ? Icons.app_registration : Icons.login),
-                label: Text(_isSignUp ? 'SIGN UP' : 'SIGN IN'),
+                label: Text(_isSignUp ? 'إنشاء حساب' : 'تسجيل الدخول'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor:
@@ -434,8 +434,8 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                       },
                 child: Text(
                   _isSignUp
-                      ? 'Already have a family? Sign In'
-                      : 'New family? Sign Up',
+                      ? 'لديك حساب بالفعل؟ سجّل دخولك'
+                      : 'عائلة جديدة؟ أنشئ حساباً',
                   style: const TextStyle(color: Colors.blue),
                 ),
               ),
@@ -452,7 +452,7 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'How it works:',
+                    'كيف يعمل التطبيق:',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
@@ -460,10 +460,10 @@ class _FamilyAuthScreenState extends State<FamilyAuthScreen> {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '1. Enter your family username\n'
-                    '2. Set up family name & admin password\n'
-                    '3. Add family members\n'
-                    '4. Track health records together',
+                    '1. أدخل اسم مستخدم العائلة\n'
+                    '2. أنشئ اسم العائلة وكلمة المسؤول\n'
+                    '3. أضف أفراد العائلة\n'
+                    '4. تابع السجلات الصحية معاً',
                     style: TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
