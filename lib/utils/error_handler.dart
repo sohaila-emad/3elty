@@ -116,7 +116,7 @@ class ErrorHandler {
     String title,
     String message, {
     VoidCallback? onRetry,
-    String retryLabel = 'Retry',
+    String retryLabel = 'إعادة المحاولة',
   }) {
     showDialog(
       context: context,
@@ -133,7 +133,7 @@ class ErrorHandler {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Close'),
+            child: const Text('إغلاق'),
           ),
           if (onRetry != null)
             ElevatedButton(
@@ -157,19 +157,19 @@ class ErrorHandler {
     final msg = error.toString();
     
     if (msg.contains('database')) {
-      return 'Database error. Please try again.';
+      return 'خطأ في قاعدة البيانات. يرجى المحاولة مجدداً.';
     }
     if (msg.contains('permission')) {
-      return 'Permission denied. Please check app permissions.';
+      return 'تم رفض الإذن. يرجى التحقق من صلاحيات التطبيق.';
     }
     if (msg.contains('not found')) {
-      return 'Item not found. It may have been deleted.';
+      return 'العنصر غير موجود. ربما تم حذفه.';
     }
     if (msg.contains('already exists')) {
-      return 'Item already exists.';
+      return 'العنصر موجود بالفعل.';
     }
     
     // Generic fallback
-    return 'An error occurred. Please try again.';
+    return 'حدث خطأ. يرجى المحاولة مجدداً.';
   }
 }
