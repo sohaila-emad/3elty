@@ -96,6 +96,7 @@ class _PregnancyMedicationsScreenState
     final nameCtrl = TextEditingController();
     final doseCtrl = TextEditingController();
     String selectedTime = 'الصباح';
+    bool showOnFamilyCalendar = false;
 
     showModalBottomSheet(
       context: context,
@@ -161,6 +162,15 @@ class _PregnancyMedicationsScreenState
                   );
                 }).toList(),
               ),
+              const SizedBox(height: 14),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                activeColor: const Color(0xFFAD1457),
+                title: const Text('Show on Family Calendar / إظهار في تقويم العائلة'),
+                subtitle: const Text('Calendar visibility only; medication notifications stay unchanged.'),
+                value: showOnFamilyCalendar,
+                onChanged: (value) => setS(() => showOnFamilyCalendar = value),
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -190,6 +200,7 @@ class _PregnancyMedicationsScreenState
                         dose: doseCtrl.text.trim(),
                         frequency: 'يومياً',
                         timeOfDay: selectedTime,
+                        showOnFamilyCalendar: showOnFamilyCalendar,
                       ));
                       if (!mounted) return;
                       navigator.pop();

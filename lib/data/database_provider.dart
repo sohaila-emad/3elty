@@ -15,7 +15,7 @@ class DatabaseProvider {
   }
 
   static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 5; // ← v5: إضافة reminder_hour/reminder_minute لجدول medications
+  static const _dbVersion = 6; // v6: show_on_family_calendar visibility flags
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
@@ -63,6 +63,7 @@ class DatabaseProvider {
         reminder_hour   INTEGER NOT NULL DEFAULT 8,
         reminder_minute INTEGER NOT NULL DEFAULT 0,
         is_active   INTEGER NOT NULL DEFAULT 1,
+        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
         created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
       )
@@ -102,6 +103,7 @@ class DatabaseProvider {
         location     TEXT,
         scheduled_at TEXT    NOT NULL,
         notes        TEXT,
+        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
         created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
       )
@@ -131,6 +133,7 @@ class DatabaseProvider {
         clinic_name  TEXT,
         received_at  TEXT,
         is_received  INTEGER NOT NULL DEFAULT 0,
+        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
         created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
       )
@@ -317,6 +320,21 @@ class DatabaseProvider {
           'ALTER TABLE medications ADD COLUMN reminder_minute INTEGER NOT NULL DEFAULT 0',
         );
       } catch (_) {}
+    }
+
+    // ── Migration v5 → v6: add independent calendar visibility flags ───────
+    if (oldVersion < 6) {
+      for (final statement in [
+        'ALTER TABLE appointments ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE medications ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE vaccinations ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
+      ]) {
+        try {
+          await db.execute(statement);
+        } catch (_) {
+          // Column may already exist on devices that were migrated manually.
+        }
+      }
     }
   }
 }

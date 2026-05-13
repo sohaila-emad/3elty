@@ -1,11 +1,16 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
-/// Unified calendar event model for appointments, vaccines, and prenatal tests
+/// Unified weekly family calendar event model.
+///
+/// The calendar is only a visibility layer. Notification scheduling remains
+/// owned by each original module/service.
 class CalendarEvent {
   final String id;
   final String familyId;
   final String memberId;
   final String memberName;
+  final String? memberProfileType;
   final EventType eventType;
   final String title;
   final DateTime eventDate;
@@ -20,6 +25,7 @@ class CalendarEvent {
     required this.familyId,
     required this.memberId,
     required this.memberName,
+    this.memberProfileType,
     required this.eventType,
     required this.title,
     required this.eventDate,
@@ -30,147 +36,112 @@ class CalendarEvent {
     required this.updatedAt,
   });
 
-  /// Create a calendar event from appointment data
-  factory CalendarEvent.fromAppointment({
-    required String id,
-    required String familyId,
-    required String memberId,
-    required String memberName,
-    required String title,
-    required String? doctor,
-    required String? location,
-    required DateTime scheduledAt,
-    required String? notes,
-  }) {
+  factory CalendarEvent.fromMap(Map<String, dynamic> m, [String? fallbackMemberName]) {
+    final rawDate = (m['event_date'] ?? m['scheduled_at'] ?? m['received_at'] ?? m['created_at']) as String?;
+    final parsedDate = rawDate == null || rawDate.isEmpty
+        ? DateTime.now()
+        : DateTime.tryParse(rawDate) ?? DateTime.now();
+
+    final rawTime = m['event_time'] as String?;
+    final hasTimeInDate = rawDate != null &&
+        (rawDate.contains('T') || RegExp(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}').hasMatch(rawDate));
+    final derivedTime = rawTime != null && rawTime.isNotEmpty
+        ? _parseTimeOfDay(rawTime)
+        : hasTimeInDate
+            ? TimeOfDay.fromDateTime(parsedDate)
+            : null;
+
+    final normalizedDate = DateTime(
+      parsedDate.year,
+      parsedDate.month,
+      parsedDate.day,
+      derivedTime?.hour ?? parsedDate.hour,
+      derivedTime?.minute ?? parsedDate.minute,
+    );
+
+    final rawCreated = m['created_at'] as String?;
+    final rawUpdated = m['updated_at'] as String?;
+
     return CalendarEvent(
-      id: id,
-      familyId: familyId,
-      memberId: memberId,
-      memberName: memberName,
-      eventType: EventType.appointment,
-      title: title,
-      eventDate: scheduledAt,
-      eventTime: TimeOfDay.fromDateTime(scheduledAt),
-      eventData: {
-        'doctor': doctor,
-        'location': location,
-        'notes': notes,
-      },
-      sourceId: id,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
+      id: (m['id'] ?? m['source_id'] ?? '${m['event_type']}_${parsedDate.millisecondsSinceEpoch}') as String,
+      familyId: (m['family_id'] ?? '') as String,
+      memberId: (m['member_id'] ?? '') as String,
+      memberName: (m['member_name'] ?? fallbackMemberName ?? 'Family') as String,
+      memberProfileType: m['member_profile_type'] as String? ?? m['profile_type'] as String?,
+      eventType: _parseEventType((m['event_type'] ?? 'appointment') as String),
+      title: (m['event_title'] ?? m['title'] ?? 'Scheduled item') as String,
+      eventDate: normalizedDate,
+      eventTime: derivedTime,
+      eventData: _readEventData(m),
+      sourceId: m['source_id'] as String? ?? m['id'] as String?,
+      createdAt: rawCreated == null ? DateTime.now() : (DateTime.tryParse(rawCreated) ?? DateTime.now()),
+      updatedAt: rawUpdated == null ? DateTime.now() : (DateTime.tryParse(rawUpdated) ?? DateTime.now()),
     );
   }
 
-  /// Create a calendar event from vaccination due date
-  factory CalendarEvent.fromVaccineDue({
-    required String id,
-    required String familyId,
-    required String memberId,
-    required String memberName,
-    required String vaccineName,
-    required DateTime dueDate,
-    required bool isReceived,
-    required String? clinicName,
-  }) {
-    return CalendarEvent(
-      id: 'vaccine_${id}_${dueDate.millisecondsSinceEpoch}',
-      familyId: familyId,
-      memberId: memberId,
-      memberName: memberName,
-      eventType: EventType.vaccination,
-      title: 'Vaccine: $vaccineName',
-      eventDate: dueDate,
-      eventData: {
-        'vaccine_name': vaccineName,
-        'is_received': isReceived,
-        'clinic_name': clinicName,
-      },
-      sourceId: id,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Create a calendar event from prenatal test due date
-  factory CalendarEvent.fromPrenatalTest({
-    required String id,
-    required String familyId,
-    required String memberId,
-    required String memberName,
-    required String testName,
-    required int trimester,
-    required DateTime dueDate,
-    required bool isCompleted,
-  }) {
-    return CalendarEvent(
-      id: 'prenatal_${id}_$trimester',
-      familyId: familyId,
-      memberId: memberId,
-      memberName: memberName,
-      eventType: EventType.prenatalTest,
-      title: 'Prenatal Test (T$trimester): $testName',
-      eventDate: dueDate,
-      eventData: {
-        'test_name': testName,
-        'trimester': trimester,
-        'is_completed': isCompleted,
-      },
-      sourceId: id,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-  /// Convert to database map
   Map<String, dynamic> toMap() => {
-    'id': id,
-    'family_id': familyId,
-    'member_id': memberId,
-    'event_type': eventType.toString().split('.').last,
-    'event_title': title,
-    'event_date': eventDate.toIso8601String(),
-    'event_time': eventTime != null ? '${eventTime!.hour.toString().padLeft(2, '0')}:${eventTime!.minute.toString().padLeft(2, '0')}' : null,
-    'event_data': eventData != null ? _encodeJson(eventData!) : null,
-    'source_id': sourceId,
-  };
+        'id': id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'member_name': memberName,
+        'member_profile_type': memberProfileType,
+        'event_type': eventType.name,
+        'event_title': title,
+        'event_date': eventDate.toIso8601String(),
+        'event_time': eventTime == null
+            ? null
+            : '${eventTime!.hour.toString().padLeft(2, '0')}:${eventTime!.minute.toString().padLeft(2, '0')}',
+        'event_data': eventData == null ? null : jsonEncode(eventData),
+        'source_id': sourceId,
+        'created_at': createdAt.toIso8601String(),
+        'updated_at': updatedAt.toIso8601String(),
+      };
 
-  /// Create from database map
-  factory CalendarEvent.fromMap(Map<String, dynamic> m, String memberName) {
-    return CalendarEvent(
-      id: m['id'] as String,
-      familyId: m['family_id'] as String,
-      memberId: m['member_id'] as String,
-      memberName: memberName,
-      eventType: _parseEventType(m['event_type'] as String),
-      title: m['event_title'] as String,
-      eventDate: DateTime.parse(m['event_date'] as String),
-      eventTime: m['event_time'] != null ? _parseTimeOfDay(m['event_time'] as String) : null,
-      eventData: m['event_data'] != null ? _decodeJson(m['event_data'] as String) : null,
-      sourceId: m['source_id'] as String?,
-      createdAt: DateTime.parse(m['created_at'] as String? ?? DateTime.now().toIso8601String()),
-      updatedAt: DateTime.parse(m['updated_at'] as String? ?? DateTime.now().toIso8601String()),
-    );
-  }
+  static Map<String, dynamic>? _readEventData(Map<String, dynamic> m) {
+    final raw = m['event_data'];
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is String && raw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map<String, dynamic>) return decoded;
+      } catch (_) {}
+    }
 
-  static String _encodeJson(Map<String, dynamic> data) {
-    // Simple JSON encoding - in production, use json.encode()
-    return data.toString();
-  }
-
-  static Map<String, dynamic> _decodeJson(String data) {
-    // Simple JSON decoding - in production, use json.decode()
-    return {};
+    final details = <String, dynamic>{};
+    for (final key in [
+      'doctor',
+      'location',
+      'notes',
+      'dose',
+      'frequency',
+      'time_of_day',
+      'reminder_hour',
+      'reminder_minute',
+      'clinic_name',
+      'received_at',
+      'is_received',
+    ]) {
+      if (m.containsKey(key) && m[key] != null) details[key] = m[key];
+    }
+    return details.isEmpty ? null : details;
   }
 
   static EventType _parseEventType(String type) {
     switch (type) {
       case 'appointment':
         return EventType.appointment;
+      case 'medicationReminder':
+      case 'medication':
+        return EventType.medicationReminder;
+      case 'childMedication':
+      case 'child_medication':
+        return EventType.childMedication;
+      case 'vaccinationReminder':
       case 'vaccination':
-        return EventType.vaccination;
-      case 'prenatalTest':
-        return EventType.prenatalTest;
+        return EventType.vaccinationReminder;
+      case 'familyReminder':
+      case 'family_reminder':
+        return EventType.familyReminder;
       default:
         return EventType.appointment;
     }
@@ -178,14 +149,19 @@ class CalendarEvent {
 
   static TimeOfDay _parseTimeOfDay(String timeStr) {
     final parts = timeStr.split(':');
-    return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    return TimeOfDay(
+      hour: int.tryParse(parts.first) ?? 0,
+      minute: parts.length > 1 ? int.tryParse(parts[1]) ?? 0 : 0,
+    );
   }
 }
 
 enum EventType {
-  appointment,    // Doctor visit
-  vaccination,    // Vaccine due / received
-  prenatalTest,   // Prenatal screening
+  appointment,
+  medicationReminder,
+  childMedication,
+  vaccinationReminder,
+  familyReminder,
 }
 
 extension EventTypeX on EventType {
@@ -193,32 +169,61 @@ extension EventTypeX on EventType {
     switch (this) {
       case EventType.appointment:
         return 'Appointment';
-      case EventType.vaccination:
+      case EventType.medicationReminder:
+        return 'Medication';
+      case EventType.childMedication:
+        return 'Child Medication';
+      case EventType.vaccinationReminder:
         return 'Vaccination';
-      case EventType.prenatalTest:
-        return 'Prenatal Test';
+      case EventType.familyReminder:
+        return 'Family Reminder';
+    }
+  }
+
+  String get arabicLabel {
+    switch (this) {
+      case EventType.appointment:
+        return 'موعد';
+      case EventType.medicationReminder:
+        return 'تذكير دواء';
+      case EventType.childMedication:
+        return 'دواء طفل';
+      case EventType.vaccinationReminder:
+        return 'تطعيم';
+      case EventType.familyReminder:
+        return 'تذكير عائلي';
     }
   }
 
   IconData get icon {
     switch (this) {
       case EventType.appointment:
-        return Icons.calendar_today;
-      case EventType.vaccination:
-        return Icons.vaccines;
-      case EventType.prenatalTest:
-        return Icons.pregnant_woman;
+        return Icons.event_available_rounded;
+      case EventType.medicationReminder:
+        return Icons.medication_rounded;
+      case EventType.childMedication:
+        return Icons.child_care_rounded;
+      case EventType.vaccinationReminder:
+        return Icons.vaccines_rounded;
+      case EventType.familyReminder:
+        return Icons.notifications_active_rounded;
     }
   }
 
   Color get color {
     switch (this) {
       case EventType.appointment:
-        return const Color(0xFF1976D2); // Blue
-      case EventType.vaccination:
-        return const Color(0xFF388E3C); // Green
-      case EventType.prenatalTest:
-        return const Color(0xFFC2185B); // Pink
+        return const Color(0xFF1976D2);
+      case EventType.medicationReminder:
+        return const Color(0xFF7B1FA2);
+      case EventType.childMedication:
+        return const Color(0xFF00897B);
+      case EventType.vaccinationReminder:
+        return const Color(0xFF2E7D32);
+      case EventType.familyReminder:
+        return const Color(0xFFE65100);
     }
   }
+
+  Color get softColor => color.withValues(alpha: 0.12);
 }

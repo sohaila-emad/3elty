@@ -60,6 +60,7 @@ class MedicationRecord {
   final int reminderHour;    // 0-23, الساعة المختارة من TimePicker
   final int reminderMinute;  // 0-59، الدقيقة المختارة من TimePicker
   final bool isActive;
+  final bool showOnFamilyCalendar;
   final String createdAt;
   final String updatedAt;
 
@@ -74,6 +75,7 @@ class MedicationRecord {
     this.reminderHour = 8,
     this.reminderMinute = 0,
     this.isActive = true,
+    this.showOnFamilyCalendar = false,
     this.createdAt = '',
     this.updatedAt = '',
   });
@@ -89,6 +91,7 @@ class MedicationRecord {
     int? reminderHour,
     int? reminderMinute,
     bool? isActive,
+    bool? showOnFamilyCalendar,
   }) => MedicationRecord(
     id:             id             ?? this.id,
     familyId:       familyId       ?? this.familyId,
@@ -100,6 +103,7 @@ class MedicationRecord {
     reminderHour:   reminderHour   ?? this.reminderHour,
     reminderMinute: reminderMinute ?? this.reminderMinute,
     isActive:       isActive       ?? this.isActive,
+    showOnFamilyCalendar: showOnFamilyCalendar ?? this.showOnFamilyCalendar,
     createdAt:      this.createdAt,
     updatedAt:      this.updatedAt,
   );
@@ -115,6 +119,7 @@ class MedicationRecord {
     'reminder_hour':   reminderHour,
     'reminder_minute': reminderMinute,
     'is_active':     isActive ? 1 : 0,
+    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
   };
 
   factory MedicationRecord.fromMap(Map<String, dynamic> m) => MedicationRecord(
@@ -127,7 +132,8 @@ class MedicationRecord {
     timeOfDay:      m['time_of_day'] as String,
     reminderHour:   (m['reminder_hour'] as int?) ?? 8,
     reminderMinute: (m['reminder_minute'] as int?) ?? 0,
-    isActive:       (m['is_active'] as int) == 1,
+    isActive:       ((m['is_active'] as int?) ?? 1) == 1,
+    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
     createdAt:      m['created_at'] as String? ?? '',
     updatedAt:      m['updated_at'] as String? ?? '',
   );
@@ -183,6 +189,7 @@ class AppointmentRecord {
   final String? location;
   final String scheduledAt;
   final String? notes;
+  final bool showOnFamilyCalendar;
   final String createdAt;
   final String updatedAt;
 
@@ -195,6 +202,7 @@ class AppointmentRecord {
     this.location,
     required this.scheduledAt,
     this.notes,
+    this.showOnFamilyCalendar = false,
     this.createdAt = '',
     this.updatedAt = '',
   });
@@ -208,6 +216,7 @@ class AppointmentRecord {
     'location':    location,
     'scheduled_at': scheduledAt,
     'notes':       notes,
+    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
   };
 
   factory AppointmentRecord.fromMap(Map<String, dynamic> m) => AppointmentRecord(
@@ -219,6 +228,7 @@ class AppointmentRecord {
     location:    m['location'] as String?,
     scheduledAt: m['scheduled_at'] as String,
     notes:       m['notes'] as String?,
+    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
     createdAt:   m['created_at'] as String? ?? '',
     updatedAt:   m['updated_at'] as String? ?? '',
   );
@@ -276,6 +286,7 @@ class VaccinationRecord {
   final String? clinicName;
   final String? receivedAt;
   final bool isReceived;
+  final bool showOnFamilyCalendar;
   final String createdAt;
   final String updatedAt;
 
@@ -287,6 +298,7 @@ class VaccinationRecord {
     this.clinicName,
     this.receivedAt,
     this.isReceived = false,
+    this.showOnFamilyCalendar = false,
     this.createdAt = '',
     this.updatedAt = '',
   });
@@ -299,6 +311,7 @@ class VaccinationRecord {
     'clinic_name': clinicName,
     'received_at': receivedAt,
     'is_received': isReceived ? 1 : 0,
+    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
   };
 
   factory VaccinationRecord.fromMap(Map<String, dynamic> m) => VaccinationRecord(
@@ -308,7 +321,8 @@ class VaccinationRecord {
     vaccineName: m['vaccine_name'] as String,
     clinicName:  m['clinic_name'] as String?,
     receivedAt:  m['received_at'] as String?,
-    isReceived:  (m['is_received'] as int) == 1,
+    isReceived:  ((m['is_received'] as int?) ?? 0) == 1,
+    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
     createdAt:   m['created_at'] as String? ?? '',
     updatedAt:   m['updated_at'] as String? ?? '',
   );
@@ -723,39 +737,113 @@ class AppRepository {
   Future<List<Map<String, dynamic>>> getCalendarEventsForFamily(
       String familyId) async {
     final db = await _db;
+    final all = <Map<String, dynamic>>[];
 
     final apptRows = await db.rawQuery('''
-      SELECT a.id, a.member_id, m.name as member_name,
-             a.title, a.scheduled_at as event_date,
-             a.doctor, a.notes, 'appointment' as event_type
+      SELECT a.id,
+             a.family_id,
+             a.member_id,
+             m.name as member_name,
+             m.profile_type as member_profile_type,
+             'appointment' as event_type,
+             a.title as event_title,
+             a.scheduled_at as event_date,
+             strftime('%H:%M', a.scheduled_at) as event_time,
+             a.doctor,
+             a.location,
+             a.notes,
+             a.id as source_id,
+             a.created_at,
+             a.updated_at
       FROM appointments a
       LEFT JOIN members m ON m.id = a.member_id
-      WHERE m.family_id = ?
-      ORDER BY a.scheduled_at ASC
+      WHERE a.family_id = ? AND COALESCE(a.show_on_family_calendar, 0) = 1
     ''', [familyId]);
+    all.addAll(apptRows.map((r) => Map<String, dynamic>.from(r)));
+
+    final medRows = await db.rawQuery('''
+      SELECT med.id,
+             med.family_id,
+             med.member_id,
+             m.name as member_name,
+             m.profile_type as member_profile_type,
+             CASE WHEN m.profile_type = 'child' THEN 'childMedication' ELSE 'medicationReminder' END as event_type,
+             med.name || ' • ' || med.dose as event_title,
+             datetime('now') as event_date,
+             printf('%02d:%02d', med.reminder_hour, med.reminder_minute) as event_time,
+             med.dose,
+             med.frequency,
+             med.time_of_day,
+             med.reminder_hour,
+             med.reminder_minute,
+             med.id as source_id,
+             med.created_at,
+             med.updated_at
+      FROM medications med
+      LEFT JOIN members m ON m.id = med.member_id
+      WHERE med.family_id = ?
+        AND med.is_active = 1
+        AND COALESCE(med.show_on_family_calendar, 0) = 1
+    ''', [familyId]);
+    all.addAll(medRows.map((r) => Map<String, dynamic>.from(r)));
 
     final vacRows = await db.rawQuery('''
-      SELECT v.id, v.member_id, m.name as member_name,
-             v.vaccine_name as title, v.due_date as event_date,
-             NULL as doctor, NULL as notes, 'vaccination' as event_type
+      SELECT v.id,
+             v.family_id,
+             v.member_id,
+             m.name as member_name,
+             m.profile_type as member_profile_type,
+             'vaccinationReminder' as event_type,
+             v.vaccine_name as event_title,
+             COALESCE(v.received_at, v.created_at) as event_date,
+             NULL as event_time,
+             v.clinic_name,
+             v.received_at,
+             v.is_received,
+             v.id as source_id,
+             v.created_at,
+             v.updated_at
       FROM vaccinations v
       LEFT JOIN members m ON m.id = v.member_id
-      WHERE m.family_id = ? AND v.is_received = 0
-      ORDER BY v.due_date ASC
+      WHERE v.family_id = ? AND COALESCE(v.show_on_family_calendar, 0) = 1
     ''', [familyId]);
+    all.addAll(vacRows.map((r) => Map<String, dynamic>.from(r)));
 
-    final all = [
-      ...apptRows.map((r) => Map<String, dynamic>.from(r)),
-      ...vacRows.map((r) => Map<String, dynamic>.from(r)),
-    ];
+    if (await _tableExists(db, 'family_reminders')) {
+      final familyReminderRows = await db.rawQuery('''
+        SELECT fr.id,
+               fr.family_id,
+               COALESCE(fr.member_id, '') as member_id,
+               COALESCE(m.name, 'Family') as member_name,
+               m.profile_type as member_profile_type,
+               'familyReminder' as event_type,
+               COALESCE(fr.title, fr.name, 'Family reminder') as event_title,
+               COALESCE(fr.scheduled_at, fr.remind_at, fr.date, fr.created_at) as event_date,
+               fr.id as source_id,
+               fr.created_at,
+               COALESCE(fr.updated_at, fr.created_at) as updated_at
+        FROM family_reminders fr
+        LEFT JOIN members m ON m.id = fr.member_id
+        WHERE fr.family_id = ? AND COALESCE(fr.show_on_family_calendar, 0) = 1
+      ''', [familyId]);
+      all.addAll(familyReminderRows.map((r) => Map<String, dynamic>.from(r)));
+    }
 
     all.sort((a, b) {
-      final da = a['event_date'] as String? ?? '';
-      final db2 = b['event_date'] as String? ?? '';
+      final da = '${a['event_date'] ?? ''} ${a['event_time'] ?? ''}';
+      final db2 = '${b['event_date'] ?? ''} ${b['event_time'] ?? ''}';
       return da.compareTo(db2);
     });
 
     return all;
+  }
+
+  Future<bool> _tableExists(Database db, String tableName) async {
+    final rows = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+      [tableName],
+    );
+    return rows.isNotEmpty;
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────

@@ -86,6 +86,69 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
 
   Future<void> _markVaccine(String vaccineName) async {
     if (widget.member.id == null) return;
+
+    bool showOnFamilyCalendar = false;
+    final shouldSave = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            24,
+            20,
+            24,
+            MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.grey200,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'تسجيل تطعيم',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 8),
+              Text(vaccineName, style: const TextStyle(color: AppColors.grey600)),
+              const SizedBox(height: 16),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppColors.teal,
+                title: const Text('Show on Family Calendar / إظهار في تقويم العائلة'),
+                subtitle: const Text('This only controls calendar visibility.'),
+                value: showOnFamilyCalendar,
+                onChanged: (value) => setSheetState(() => showOnFamilyCalendar = value),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('حفظ التطعيم'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (shouldSave != true) return;
+
     try {
       final familyId = await _authService.familyId;
       if (!mounted) return;
@@ -96,6 +159,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
         vaccineName: vaccineName,
         isReceived: true,
         receivedAt: DateTime.now().toIso8601String().split('T').first,
+        showOnFamilyCalendar: showOnFamilyCalendar,
       ));
       if (!mounted) return;
       _showSuccess('تم تسجيل "$vaccineName" ✓');
