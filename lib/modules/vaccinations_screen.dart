@@ -38,9 +38,10 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
     {'vaccine': 'Td (Tetanus-Diphtheria)', 'ageLabel': '١٢ سنة',        'ageMonths': 144},
   ];
 
-  // Vaccines due up to child's current age (in years → converted to months)
+  // Vaccines due up to child's current age.
+  // member.age is stored in MONTHS for children — use it directly.
   List<Map<String, dynamic>> get _dueSchedule {
-    final ageMonths = widget.member.age * 12;
+    final ageMonths = widget.member.age; // already months
     return _fullSchedule
         .where((v) => (v['ageMonths'] as int) <= ageMonths)
         .toList();
@@ -48,7 +49,7 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
 
   // Vaccines not yet due but coming within 6 months
   List<Map<String, dynamic>> get _upcomingSchedule {
-    final ageMonths = widget.member.age * 12;
+    final ageMonths = widget.member.age; // already months
     return _fullSchedule
         .where((v) {
           final va = v['ageMonths'] as int;
@@ -143,7 +144,8 @@ class _VaccinationsScreenState extends State<VaccinationsScreen> {
                       const SizedBox(width: 12),
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text(widget.member.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.grey900)),
-                        Text('${widget.member.age} سنة', style: TextStyle(fontSize: 13, color: t.color, fontWeight: FontWeight.w500)),
+                        // formattedAge handles months for children
+                        Text(widget.member.formattedAge, style: TextStyle(fontSize: 13, color: t.color, fontWeight: FontWeight.w500)),
                       ])),
                       // Progress badge
                       Container(

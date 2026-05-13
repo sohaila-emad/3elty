@@ -116,3 +116,20 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+  # ── Assets ──────────────────────────────────────────────────────────────────
+  # Amiri Arabic font (used by PDF/report services for proper Arabic rendering)
+  assets:
+    - assets/fonts/Amiri/
+
+  # ── Fonts (Flutter UI) ───────────────────────────────────────────────────────
+  fonts:
+    - family: Amiri
+      fonts:
+        - asset: assets/fonts/Amiri/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri/Amiri-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Amiri/Amiri-Italic.ttf
+          style: italic
+        - asset: assets/fonts/Amiri/Amiri-BoldItalic.ttf
+          weight: 700
+          style: italic

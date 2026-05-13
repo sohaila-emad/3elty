@@ -62,9 +62,11 @@ class ReportService {
     required String memberId,
   }) async {
     // Load Amiri font for Arabic support
+    // Font files live at assets/fonts/Amiri/Amiri-Regular.ttf (registered in pubspec.yaml)
     pw.Font amiri;
     try {
-      final fontData = await rootBundle.load('assets/fonts/Amiri-Regular.ttf');
+      final fontData =
+          await rootBundle.load('assets/fonts/Amiri/Amiri-Regular.ttf');
       amiri = pw.Font.ttf(fontData);
     } catch (_) {
       amiri = pw.Font.helvetica();

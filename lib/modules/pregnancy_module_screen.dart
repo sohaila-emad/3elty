@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../data/app_repository.dart';
 import '../services/remote_auth_service.dart';
+import '../services/firestore_service.dart';
 
 /// Pregnancy module for pregnant women
 /// Includes prenatal tests by trimester, daily medications, and food safety guide
@@ -18,6 +20,7 @@ class _PregnancyModuleScreenState extends State<PregnancyModuleScreen>
     with SingleTickerProviderStateMixin {
   final _repo = AppRepository.instance;
   final _authService = RemoteAuthService.instance;
+  final _firestoreService = FirestoreService.instance;
 
   late TabController _tabController;
   Map<int, List<Map<String, dynamic>>> _prenatalTestsByTrimester = {};
@@ -25,17 +28,51 @@ class _PregnancyModuleScreenState extends State<PregnancyModuleScreen>
 
   // Daily medications for pregnancy
   final List<String> _prenatalMeds = ['Folic Acid', 'Iron', 'Calcium'];
-  final Map<String, bool> _medConfirmed = {
+  Map<String, bool> _medConfirmed = {
     'Folic Acid': false,
     'Iron': false,
     'Calcium': false,
   };
+
+  // SharedPreferences key prefix for daily medication confirmations
+  String get _medsPrefsPrefix =>
+      'pregnancy_meds_${widget.member.id ?? "unknown"}_${_todayKey()}';
+
+  String _todayKey() {
+    final now = DateTime.now();
+    return '${now.year}_${now.month.toString().padLeft(2, '0')}_${now.day.toString().padLeft(2, '0')}';
+  }
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _loadPrenatalTests();
+    _loadMedConfirmations();
+  }
+
+  /// Load today's medication confirmations from SharedPreferences.
+  Future<void> _loadMedConfirmations() async {
+    final prefs = await SharedPreferences.getInstance();
+    final updated = <String, bool>{};
+    for (final med in _prenatalMeds) {
+      final key = '${_medsPrefsPrefix}_$med';
+      updated[med] = prefs.getBool(key) ?? false;
+    }
+    if (!mounted) return;
+    setState(() => _medConfirmed = updated);
+  }
+
+  /// Persist a medication confirmation to SharedPreferences.
+  Future<void> _saveMedConfirmation(String med, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('${_medsPrefsPrefix}_$med', value);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPrenatalTests() async {
@@ -85,12 +122,6 @@ class _PregnancyModuleScreenState extends State<PregnancyModuleScreen>
       content: Text(msg, style: const TextStyle(color: Colors.white)),
     ),
   );
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -270,7 +301,8 @@ class _PregnancyModuleScreenState extends State<PregnancyModuleScreen>
                 ),
                 onPressed: () async {
                   try {
-                    await _repo.completePrenatalTest(test['id']);
+                    // Write to Firestore AND SQLite via FirestoreService
+                    await _firestoreService.completePrenatalTest(test['id']);
                     _loadPrenatalTests();
                     _showSuccess('Test marked as completed');
                   } catch (e) {
@@ -333,9 +365,12 @@ class _PregnancyModuleScreenState extends State<PregnancyModuleScreen>
           child: Checkbox(
             value: isConfirmed,
             onChanged: (value) {
+              final confirmed = value ?? false;
               setState(() {
-                _medConfirmed[medication] = value ?? false;
+                _medConfirmed[medication] = confirmed;
               });
+              // Persist today's confirmation so it survives hot-restart
+              _saveMedConfirmation(medication, confirmed);
             },
             activeColor: AppColors.green,
             shape: RoundedRectangleBorder(

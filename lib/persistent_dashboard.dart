@@ -451,7 +451,7 @@ class _MemberCard extends StatelessWidget {
                                 color: t.color)),
                       ),
                       const SizedBox(width: 8),
-                      Text('${member.age} yrs',
+                      Text(member.formattedAge,
                           style: const TextStyle(
                               fontSize: 13,
                               color: AppColors.grey600)),

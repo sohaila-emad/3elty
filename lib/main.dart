@@ -765,8 +765,9 @@ class _ProfileHeroHeader extends StatelessWidget {
                 Row(children: [
                   _ProfileChip(label: t.label, color: t.color, bgColor: t.bgColor),
                   const SizedBox(width: 8),
+                  // formattedAge handles months for children (e.g. 36 months → "3 سنة")
                   _ProfileChip(
-                    label: '${member.age} سنة',
+                    label: member.formattedAge,
                     color: AppColors.grey600,
                     bgColor: AppColors.grey100,
                   ),

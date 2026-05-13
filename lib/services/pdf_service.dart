@@ -28,9 +28,11 @@ class PDFService {
     final pdf = pw.Document();
 
     // Load Amiri font for Arabic text support
+    // Font files live at assets/fonts/Amiri/Amiri-Regular.ttf (registered in pubspec.yaml)
     pw.Font amiri;
     try {
-      final fontData = await rootBundle.load('assets/fonts/Amiri-Regular.ttf');
+      final fontData =
+          await rootBundle.load('assets/fonts/Amiri/Amiri-Regular.ttf');
       amiri = pw.Font.ttf(fontData);
     } catch (_) {
       amiri = pw.Font.helvetica();
@@ -79,7 +81,7 @@ class PDFService {
                 title: 'PERSONAL INFORMATION',
                 children: [
                   _buildInfoRow('Name:', member.name),
-                  _buildInfoRow('Age:', '${member.age} years'),
+                  _buildInfoRow('Age:', member.formattedAge),
                   _buildInfoRow('Profile Type:', member.profileType.label),
                   _buildInfoRow('Generated:', DateFormat('MMM dd, yyyy').format(DateTime.now())),
                 ],
@@ -207,9 +209,11 @@ class PDFService {
     final pdf = pw.Document();
 
     // Load Amiri font for Arabic text support
+    // Font files live at assets/fonts/Amiri/Amiri-Regular.ttf (registered in pubspec.yaml)
     pw.Font amiri;
     try {
-      final fontData = await rootBundle.load('assets/fonts/Amiri-Regular.ttf');
+      final fontData =
+          await rootBundle.load('assets/fonts/Amiri/Amiri-Regular.ttf');
       amiri = pw.Font.ttf(fontData);
     } catch (_) {
       amiri = pw.Font.helvetica();
@@ -266,7 +270,7 @@ class PDFService {
                     children: [
                       pw.Text('Patient: ${member.name}',
                           style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                      pw.Text('Age: ${member.age}', style: const pw.TextStyle(fontSize: 10)),
+                      pw.Text('Age: ${member.formattedAge}', style: const pw.TextStyle(fontSize: 10)),
                     ],
                   ),
                   pw.Text(

@@ -139,8 +139,89 @@ class FirestoreService {
           await _repository.addVital(vitalData);
         }
       }
+
+      // 7. Sync prenatal tests (pregnancy module)
+      await _syncPrenatalTests(familyId);
     } catch (e) {
       rethrow;
+    }
+  }
+
+  // ─── Prenatal Tests ────────────────────────────────────────────────────────
+
+  /// Seed default prenatal tests for a newly added pregnant member.
+  /// Writes to Firestore AND local SQLite so data is available offline.
+  Future<void> seedPrenatalTestsForMember({
+    required String memberId,
+    required String familyId,
+  }) async {
+    const defaultTests = [
+      {'trimester': 1, 'test_name': 'Complete Blood Count (CBC)'},
+      {'trimester': 1, 'test_name': 'Blood Type & Rh Factor'},
+      {'trimester': 1, 'test_name': 'Urine Analysis'},
+      {'trimester': 1, 'test_name': 'Fasting Blood Sugar'},
+      {'trimester': 1, 'test_name': 'First-Trimester Ultrasound (NT Scan)'},
+      {'trimester': 2, 'test_name': 'Anomaly Scan Ultrasound (Level 2)'},
+      {'trimester': 2, 'test_name': 'Glucose Challenge Test (GCT)'},
+      {'trimester': 2, 'test_name': 'Hemoglobin Level'},
+      {'trimester': 3, 'test_name': 'Group B Streptococcus (GBS)'},
+      {'trimester': 3, 'test_name': 'Non-Stress Test (NST)'},
+      {'trimester': 3, 'test_name': 'Third-Trimester Ultrasound'},
+    ];
+
+    for (final test in defaultTests) {
+      final docRef = _firestore.collection('prenatal_tests').doc();
+      final data = {
+        'id': docRef.id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'trimester': test['trimester'],
+        'test_name': test['test_name'],
+        'is_completed': 0,
+        'completed_at': null,
+        'created_at': FieldValue.serverTimestamp(),
+      };
+      await docRef.set(data);
+      // Also persist locally
+      await _repository.insertPrenatalTest({
+        'id': docRef.id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'trimester': test['trimester'],
+        'test_name': test['test_name'],
+        'is_completed': 0,
+        'completed_at': null,
+      });
+    }
+  }
+
+  /// Mark a prenatal test as completed — writes to both Firestore and SQLite.
+  Future<void> completePrenatalTest(String testId) async {
+    final completedAt = DateTime.now().toIso8601String();
+    // Write to Firestore
+    await _firestore.collection('prenatal_tests').doc(testId).update({
+      'is_completed': 1,
+      'completed_at': completedAt,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+    // Write to local SQLite (keeps offline view consistent)
+    await _repository.completePrenatalTest(testId);
+  }
+
+  /// Sync prenatal tests from Firestore to local SQLite.
+  /// Called as part of [syncFamilyData].
+  Future<void> _syncPrenatalTests(String familyId) async {
+    final snapshot = await _firestore
+        .collection('prenatal_tests')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      // Upsert: replace existing row or insert new one
+      await _repository.insertPrenatalTest(data);
     }
   }
 

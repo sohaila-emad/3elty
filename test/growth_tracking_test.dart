@@ -11,6 +11,9 @@
 //  RUN: flutter test test/unit/growth_tracking_test.dart
 // ============================================================
 
+
+
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 
@@ -23,6 +26,13 @@ void main() {
   //  Makes sure the right WHO weight band is returned for
   //  each key age milestone.
   // ─────────────────────────────────────────────────────────
+
+
+  String? validateGrowthEntry(String type, double value, int ageInMonths) {
+  final result = validateSingleMeasurement(type, value, ageInMonths);
+  return result.blocksSubmit ? result.message : null;
+}
+
   group('whoWeightRange()', () {
 
     test('UT-GR-01 | newborn (0 months) → range 2.9–5.1 kg', () {
