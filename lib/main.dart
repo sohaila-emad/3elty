@@ -381,7 +381,11 @@ List<HealthModule> modulesFor(ProfileType type) {
 // ─── APP ─────────────────────────────────────────────────────────────────────
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  // Initialise local notifications (channels, permissions, timezone) before
+  // the UI is shown so that any rescheduled alarms fire correctly.
+  await NotificationHelper.instance.initialize();
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
@@ -1006,6 +1010,7 @@ class _ModuleCard extends StatelessWidget {
   final VoidCallback onTap;
   const _ModuleCard({required this.module, required this.onTap});
 
+  @override
   @override
   Widget build(BuildContext context) {
     return Material(
