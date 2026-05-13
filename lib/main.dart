@@ -193,6 +193,14 @@ List<HealthModule> modulesFor(ProfileType type) {
           bgColor: Color(0xFFE3F2FD),
         ),
         HealthModule(
+          id: 'medications',
+          title: 'الأدوية',
+          subtitle: 'تتبع أدوية الطفل وجرعاتها وتذكيراتها',
+          icon: Icons.medication_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+        ),
+        HealthModule(
           id: 'appointments',
           title: 'المواعيد',
           subtitle: 'زيارات طبيب الأطفال والتذكيرات',
