@@ -580,8 +580,10 @@ class AppRepository {
   Future<void> updateAppointment(Map<String, dynamic> apptData) async {
     final db = await _db;
     final id = apptData['id'] as String?;
-    if (id == null) throw Exception('Appointment ID required for update');
-    await db.update('appointments', apptData, where: 'id = ?', whereArgs: [id]);
+    if (id == null || id.isEmpty) throw Exception('Appointment ID required for update');
+    final data = Map<String, dynamic>.from(apptData);
+    data['updated_at'] = DateTime.now().toIso8601String();
+    await db.update('appointments', data, where: 'id = ?', whereArgs: [id]);
   }
 
   Future<AppointmentRecord?> getAppointmentById(String id) async {
@@ -592,11 +594,15 @@ class AppRepository {
 
   Future<int> insertAppointment(AppointmentRecord r) async {
     final db = await _db;
-    return db.insert('appointments', r.toMap());
+    final map = r.toMap();
+    map['id'] = r.id ?? _generateId();
+    map['updated_at'] = DateTime.now().toIso8601String();
+    return db.insert('appointments', map, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<AppointmentRecord>> getAppointmentsForMember(String memberId) async {
     final db = await _db;
+    await _ensureAppointmentIds(db);
     final rows = await db.query('appointments',
         where: 'member_id = ?',
         whereArgs: [memberId],
@@ -606,6 +612,7 @@ class AppRepository {
 
   Future<List<AppointmentRecord>> getUpcomingAppointments() async {
     final db = await _db;
+    await _ensureAppointmentIds(db);
     final now = DateTime.now().toIso8601String();
     final rows = await db.query('appointments',
         where: 'scheduled_at >= ?',
@@ -844,6 +851,28 @@ class AppRepository {
       [tableName],
     );
     return rows.isNotEmpty;
+  }
+
+  Future<void> _ensureAppointmentIds(Database db) async {
+    final rows = await db.query(
+      'appointments',
+      columns: ['rowid'],
+      where: "id IS NULL OR id = ''",
+    );
+
+    for (final row in rows) {
+      final rowId = row['rowid'];
+      if (rowId == null) continue;
+      await db.update(
+        'appointments',
+        {
+          'id': _generateId(),
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'rowid = ?',
+        whereArgs: [rowId],
+      );
+    }
   }
 
   // ── Private helpers ────────────────────────────────────────────────────────
