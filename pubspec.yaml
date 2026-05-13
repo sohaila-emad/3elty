@@ -38,6 +38,7 @@ dependencies:
   path_provider: ^2.1.3   # للوصول إلى ذاكرة التخزين
   file_picker: ^8.0.0      # لحل أخطاء document_file_helper.dart
   workmanager: ^0.6.0
+  lottie: ^3.3.3
 
   image_picker: ^1.1.2     # مطلوب أيضاً في مساعد الملفات
   # The following adds the Cupertino Icons font to your application.
@@ -75,6 +76,7 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -121,6 +123,9 @@ flutter:
   # Amiri Arabic font (used by PDF/report services for proper Arabic rendering)
   assets:
     - assets/fonts/Amiri/
+    - assets/icon/
+    - assets/lottie/
+    - assets/gifs/
 
   # ── Fonts (Flutter UI) ───────────────────────────────────────────────────────
   fonts:
@@ -134,3 +139,15 @@ flutter:
         - asset: assets/fonts/Amiri/Amiri-BoldItalic.ttf
           weight: 700
           style: italic
+
+# ── App launcher icon generation ─────────────────────────────────────────────
+# Source image: assets/icon/3elty.png
+# Run after placing the image:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/3elty.png
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: assets/icon/3elty.png
+  min_sdk_android: 21

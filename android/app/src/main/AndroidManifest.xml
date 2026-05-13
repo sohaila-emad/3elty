@@ -18,7 +18,7 @@
     <!-- ──────────────────────────────────────────────────────────────────── -->
 
     <application
-        android:label="flutter_application_1"
+        android:label="3elty"
         android:name=".Application"
         android:icon="@mipmap/ic_launcher">
 

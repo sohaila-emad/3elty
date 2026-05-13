@@ -9,6 +9,7 @@ import 'utils/error_handler.dart';
 import 'screens/first_time_setup_screen.dart';
 import 'modules/family_calendar_screen.dart';
 import 'data/models/calendar_event.dart';
+import 'screens/profile_intro_animation_screen.dart';
 
 class FamilyDashboard extends StatefulWidget {
   const FamilyDashboard({super.key});
@@ -426,12 +427,7 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                           }
                         }
                         if (context.mounted) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => MemberProfileScreen(member: member),
-                            ),
-                          );
+                          _openMemberProfileWithIntro(member);
                         }
                       },
                       onLongPress: () => _confirmDeleteMember(member),
@@ -441,6 +437,19 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
           ],
         ),
       );
+
+  void _openMemberProfileWithIntro(FamilyMember member) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ProfileIntroAnimationScreen(
+          member: member,
+          nextScreen: MemberProfileScreen(member: member),
+        ),
+      ),
+    );
+  }
+
 
   Widget _emptyStateContent() => Padding(
         padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
@@ -547,12 +556,7 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                   }
                 }
                 if (context.mounted) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MemberProfileScreen(member: member),
-                    ),
-                  );
+                  _openMemberProfileWithIntro(member);
                 }
               },
               onLongPress: () => _confirmDeleteMember(member),

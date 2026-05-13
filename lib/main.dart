@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'screens/splash_screen.dart';
 import 'firebase_options.dart';
 import 'modules/food_safety_screen.dart';
 import 'modules/pregnancy_medications_screen.dart';
@@ -189,14 +190,6 @@ List<HealthModule> modulesFor(ProfileType type) {
           title: 'تتبع النمو',
           subtitle: 'الوزن والطول مقارنةً بمعايير منظمة الصحة',
           icon: Icons.show_chart_rounded,
-          color: Color(0xFF1565C0),
-          bgColor: Color(0xFFE3F2FD),
-        ),
-        HealthModule(
-          id: 'medications',
-          title: 'الأدوية',
-          subtitle: 'تتبع أدوية الطفل وجرعاتها وتذكيراتها',
-          icon: Icons.medication_rounded,
           color: Color(0xFF1565C0),
           bgColor: Color(0xFFE3F2FD),
         ),
@@ -484,7 +477,7 @@ class E3ltyApp extends StatelessWidget {
           iconTheme: IconThemeData(color: AppColors.grey900),
         ),
       ),
-      home: const _AuthWrapper(),
+      home: const SplashScreen(nextScreen: _AuthWrapper()),
       routes: {
         '/persistent_dashboard': (context) => const FamilyDashboard(),
         '/admin_member_management': (context) => ProtectedRoute(

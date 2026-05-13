@@ -15,7 +15,7 @@ class DatabaseProvider {
   }
 
   static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 6; // v6: show_on_family_calendar visibility flags
+  static const _dbVersion = 7; // v7: ensure members.phone/user_id columns for Firestore sync
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
@@ -45,6 +45,7 @@ class DatabaseProvider {
         age         INTEGER NOT NULL,
         profile_type TEXT   NOT NULL,
         user_id     TEXT,
+        phone       TEXT,
         created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
       )
@@ -180,6 +181,7 @@ class DatabaseProvider {
           age         INTEGER NOT NULL,
           profile_type TEXT   NOT NULL,
           user_id     TEXT,
+          phone       TEXT,
           created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
           updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
         )
@@ -335,6 +337,28 @@ class DatabaseProvider {
           // Column may already exist on devices that were migrated manually.
         }
       }
+    }
+
+    // ── Migration v6 → v7: ensure members table matches MemberRecord sync ───
+    // Some fresh/reinstalled builds created members without phone, while
+    // Firestore/member sync inserts both phone and user_id. Add both safely so
+    // existing local databases do not crash during auth/sync.
+    if (oldVersion < 7) {
+      await _addColumnIfMissing(db, 'members', 'phone', 'TEXT');
+      await _addColumnIfMissing(db, 'members', 'user_id', 'TEXT');
+    }
+  }
+
+  Future<void> _addColumnIfMissing(
+    Database db,
+    String table,
+    String column,
+    String definition,
+  ) async {
+    final columns = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = columns.any((row) => row['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     }
   }
 }
