@@ -15,7 +15,7 @@ class DatabaseProvider {
   }
 
   static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 4; // ← v4: إضافة عمود phone لجدول members
+  static const _dbVersion = 5; // ← v5: إضافة reminder_hour/reminder_minute لجدول medications
 
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
@@ -60,6 +60,8 @@ class DatabaseProvider {
         dose        TEXT    NOT NULL,
         frequency   TEXT    NOT NULL,
         time_of_day TEXT    NOT NULL,
+        reminder_hour   INTEGER NOT NULL DEFAULT 8,
+        reminder_minute INTEGER NOT NULL DEFAULT 0,
         is_active   INTEGER NOT NULL DEFAULT 1,
         created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
         updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -189,6 +191,8 @@ class DatabaseProvider {
           dose        TEXT    NOT NULL,
           frequency   TEXT    NOT NULL,
           time_of_day TEXT    NOT NULL,
+          reminder_hour   INTEGER NOT NULL DEFAULT 8,
+          reminder_minute INTEGER NOT NULL DEFAULT 0,
           is_active   INTEGER NOT NULL DEFAULT 1,
           created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
           updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -299,6 +303,20 @@ class DatabaseProvider {
       } catch (_) {
         // العمود موجود بالفعل على بعض الأجهزة — آمن للتجاهل
       }
+    }
+
+    // ── Migration v4 → v5: إضافة reminder_hour / reminder_minute للأدوية ──
+    if (oldVersion < 5) {
+      try {
+        await db.execute(
+          'ALTER TABLE medications ADD COLUMN reminder_hour INTEGER NOT NULL DEFAULT 8',
+        );
+      } catch (_) {}
+      try {
+        await db.execute(
+          'ALTER TABLE medications ADD COLUMN reminder_minute INTEGER NOT NULL DEFAULT 0',
+        );
+      } catch (_) {}
     }
   }
 }

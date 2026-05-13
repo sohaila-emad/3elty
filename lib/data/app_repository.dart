@@ -57,6 +57,8 @@ class MedicationRecord {
   final String dose;
   final String frequency;
   final String timeOfDay;
+  final int reminderHour;    // 0-23, الساعة المختارة من TimePicker
+  final int reminderMinute;  // 0-59، الدقيقة المختارة من TimePicker
   final bool isActive;
   final String createdAt;
   final String updatedAt;
@@ -69,33 +71,65 @@ class MedicationRecord {
     required this.dose,
     required this.frequency,
     required this.timeOfDay,
+    this.reminderHour = 8,
+    this.reminderMinute = 0,
     this.isActive = true,
     this.createdAt = '',
     this.updatedAt = '',
   });
 
+  MedicationRecord copyWith({
+    String? id,
+    String? familyId,
+    String? memberId,
+    String? name,
+    String? dose,
+    String? frequency,
+    String? timeOfDay,
+    int? reminderHour,
+    int? reminderMinute,
+    bool? isActive,
+  }) => MedicationRecord(
+    id:             id             ?? this.id,
+    familyId:       familyId       ?? this.familyId,
+    memberId:       memberId       ?? this.memberId,
+    name:           name           ?? this.name,
+    dose:           dose           ?? this.dose,
+    frequency:      frequency      ?? this.frequency,
+    timeOfDay:      timeOfDay      ?? this.timeOfDay,
+    reminderHour:   reminderHour   ?? this.reminderHour,
+    reminderMinute: reminderMinute ?? this.reminderMinute,
+    isActive:       isActive       ?? this.isActive,
+    createdAt:      this.createdAt,
+    updatedAt:      this.updatedAt,
+  );
+
   Map<String, dynamic> toMap() => {
     if (id != null)       'id': id,
     if (familyId != null) 'family_id': familyId,
-    'member_id':  memberId,
-    'name':       name,
-    'dose':       dose,
-    'frequency':  frequency,
-    'time_of_day': timeOfDay,
-    'is_active':  isActive ? 1 : 0,
+    'member_id':     memberId,
+    'name':          name,
+    'dose':          dose,
+    'frequency':     frequency,
+    'time_of_day':   timeOfDay,
+    'reminder_hour':   reminderHour,
+    'reminder_minute': reminderMinute,
+    'is_active':     isActive ? 1 : 0,
   };
 
   factory MedicationRecord.fromMap(Map<String, dynamic> m) => MedicationRecord(
-    id:        m['id'] as String?,
-    familyId:  m['family_id'] as String?,
-    memberId:  m['member_id'] as String,
-    name:      m['name'] as String,
-    dose:      m['dose'] as String,
-    frequency: m['frequency'] as String,
-    timeOfDay: m['time_of_day'] as String,
-    isActive:  (m['is_active'] as int) == 1,
-    createdAt: m['created_at'] as String? ?? '',
-    updatedAt: m['updated_at'] as String? ?? '',
+    id:             m['id'] as String?,
+    familyId:       m['family_id'] as String?,
+    memberId:       m['member_id'] as String,
+    name:           m['name'] as String,
+    dose:           m['dose'] as String,
+    frequency:      m['frequency'] as String,
+    timeOfDay:      m['time_of_day'] as String,
+    reminderHour:   (m['reminder_hour'] as int?) ?? 8,
+    reminderMinute: (m['reminder_minute'] as int?) ?? 0,
+    isActive:       (m['is_active'] as int) == 1,
+    createdAt:      m['created_at'] as String? ?? '',
+    updatedAt:      m['updated_at'] as String? ?? '',
   );
 }
 
@@ -419,15 +453,23 @@ class AppRepository {
     await db.delete('medications', where: 'id = ?', whereArgs: [id]);
   }
 
-  Future<int> insertMedication(MedicationRecord r) async {
+  /// Inserts a new medication, generating a stable ID if the record has none.
+  /// Returns the saved [MedicationRecord] — always with a non-null [id].
+  Future<MedicationRecord> insertMedication(MedicationRecord r) async {
     final db = await _db;
-    return db.insert('medications', r.toMap());
+    final id = r.id ?? _generateId();
+    final saved = r.copyWith(id: id);
+    await db.insert('medications', saved.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    return saved;
   }
 
-  Future<int> updateMedicationRecord(MedicationRecord r) async {
+  Future<void> updateMedicationRecord(MedicationRecord r) async {
+    if (r.id == null) throw Exception('Medication ID required for update');
     final db = await _db;
-    return db.update('medications', r.toMap(),
-        where: 'id = ?', whereArgs: [r.id]);
+    final map = r.toMap();
+    map['updated_at'] = DateTime.now().toIso8601String();
+    await db.update('medications', map, where: 'id = ?', whereArgs: [r.id]);
   }
 
   Future<int> confirmMedication(String medicationId) async {

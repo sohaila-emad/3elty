@@ -112,17 +112,19 @@ class NotificationHelper {
   /// [medicationId]  : المعرّف الفريد للدواء
   /// [medicationName]: اسم الدواء بالعربية
   /// [memberName]    : اسم فرد العائلة
-  /// [timeOfDay]     : وقت الجرعة (الصباح / الظهر / المساء / الليل)
+  /// [hour]          : الساعة (0-23) من TimePicker
+  /// [minute]        : الدقيقة (0-59) من TimePicker
   Future<void> scheduleMedicationReminder({
     required String medicationId,
     required String medicationName,
     required String memberName,
-    required String timeOfDay,
+    required int hour,
+    required int minute,
   }) async {
     await initialize();
 
     final notifId = _stringToId(medicationId, _medicationIdBase);
-    final time = _timeOfDayToTime(timeOfDay);
+    final timeLabel = _formatTime(hour, minute);
 
     final androidDetails = _androidDetails(
       channelId: _channelMedications,
@@ -145,8 +147,8 @@ class NotificationHelper {
     await _plugin.zonedSchedule(
       notifId,
       '💊 حان موعد الدواء',
-      '$memberName — $medicationName ($timeOfDay)',
-      _nextInstanceOfTime(time.hour, time.minute),
+      '$memberName — $medicationName ($timeLabel)',
+      _nextInstanceOfTime(hour, minute),
       notifDetails,
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
@@ -155,7 +157,7 @@ class NotificationHelper {
       payload: 'medication:$medicationId',
     );
 
-    debugPrint('[NotificationHelper] تم جدولة تذكير دواء: $medicationName (ID: $notifId)');
+    debugPrint('[NotificationHelper] تم جدولة تذكير دواء: $medicationName ($timeLabel) (ID: $notifId)');
   }
 
   /// يلغي إشعار دواء معين (عند الحذف)
@@ -426,20 +428,11 @@ class NotificationHelper {
 
   // ─── دوال مساعدة خاصة ─────────────────────────────────────────────────────
 
-  /// يحوّل وقت الجرعة النصي إلى ساعة ودقيقة
-  ({int hour, int minute}) _timeOfDayToTime(String timeOfDay) {
-    switch (timeOfDay) {
-      case 'الصباح':
-        return (hour: 8, minute: 0);
-      case 'الظهر':
-        return (hour: 12, minute: 30);
-      case 'المساء':
-        return (hour: 17, minute: 0);
-      case 'الليل':
-        return (hour: 21, minute: 0);
-      default:
-        return (hour: 9, minute: 0);
-    }
+  /// يُنسّق الساعة والدقيقة كنص (مثال: 08:30)
+  String _formatTime(int hour, int minute) {
+    final h = hour.toString().padLeft(2, '0');
+    final m = minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   /// يحسب أقرب وقت قادم لساعة ودقيقة محددتين (اليوم أو الغد)
