@@ -1,7 +1,32 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:sqflite/sqflite.dart';
+
+import '../services/remote_auth_service.dart';
 import 'database_provider.dart';
 
-// ─── MemberRecord ─────────────────────────────────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
+int _boolToInt(bool value) => value ? 1 : 0;
+
+bool _readBool(dynamic value, {bool fallback = false}) {
+  if (value == null) return fallback;
+  if (value is bool) return value;
+  if (value is int) return value == 1;
+  if (value is num) return value.toInt() == 1;
+  if (value is String) {
+    final v = value.toLowerCase().trim();
+    return v == 'true' || v == '1' || v == 'yes';
+  }
+  return fallback;
+}
+
+String? _readDateString(dynamic value) {
+  if (value == null) return null;
+  if (value is Timestamp) return value.toDate().toIso8601String();
+  if (value is DateTime) return value.toIso8601String();
+  return value.toString();
+}
+
+// ─── MemberRecord ───────────────────────────────────────────────────────────
 class MemberRecord {
   final String? id;
   final String? familyId;
@@ -9,7 +34,7 @@ class MemberRecord {
   final int age;
   final String profileType;
   final String? userId;
-  final String? phone;          // ← ADDED
+  final String? phone;
   final String createdAt;
   final String updatedAt;
 
@@ -20,35 +45,59 @@ class MemberRecord {
     required this.age,
     required this.profileType,
     this.userId,
-    this.phone,                 // ← ADDED
+    this.phone,
     this.createdAt = '',
     this.updatedAt = '',
   });
 
+  MemberRecord copyWith({
+    String? id,
+    String? familyId,
+    String? name,
+    int? age,
+    String? profileType,
+    String? userId,
+    String? phone,
+    String? createdAt,
+    String? updatedAt,
+  }) => MemberRecord(
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        name: name ?? this.name,
+        age: age ?? this.age,
+        profileType: profileType ?? this.profileType,
+        userId: userId ?? this.userId,
+        phone: phone ?? this.phone,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+
   Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'name':         name,
-    'age':          age,
-    'profile_type': profileType,
-    if (userId != null) 'user_id': userId,
-    if (phone != null)  'phone': phone,   // ← ADDED
-  };
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'name': name,
+        'age': age,
+        'profile_type': profileType,
+        'phone': phone,
+        'user_id': userId,
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+      };
 
   factory MemberRecord.fromMap(Map<String, dynamic> m) => MemberRecord(
-    id:          m['id'] as String?,
-    familyId:    m['family_id'] as String?,
-    name:        m['name'] as String,
-    age:         m['age'] as int,
-    profileType: m['profile_type'] as String,
-    userId:      m['user_id'] as String?,
-    phone:       m['phone'] as String?,   // ← ADDED (safe — returns null if missing)
-    createdAt:   m['created_at'] as String? ?? '',
-    updatedAt:   m['updated_at'] as String? ?? '',
-  );
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        name: (m['name'] ?? '') as String,
+        age: (m['age'] as num?)?.toInt() ?? 0,
+        profileType: (m['profile_type'] ?? 'adult') as String,
+        userId: m['user_id'] as String?,
+        phone: m['phone'] as String?,
+        createdAt: _readDateString(m['created_at']) ?? '',
+        updatedAt: _readDateString(m['updated_at']) ?? '',
+      );
 }
 
-// ─── MedicationRecord ─────────────────────────────────────────────────────────
+// ─── MedicationRecord ───────────────────────────────────────────────────────
 class MedicationRecord {
   final String? id;
   final String? familyId;
@@ -57,8 +106,8 @@ class MedicationRecord {
   final String dose;
   final String frequency;
   final String timeOfDay;
-  final int reminderHour;    // 0-23, الساعة المختارة من TimePicker
-  final int reminderMinute;  // 0-59، الدقيقة المختارة من TimePicker
+  final int reminderHour;
+  final int reminderMinute;
   final bool isActive;
   final bool showOnFamilyCalendar;
   final String createdAt;
@@ -75,7 +124,7 @@ class MedicationRecord {
     this.reminderHour = 8,
     this.reminderMinute = 0,
     this.isActive = true,
-    this.showOnFamilyCalendar = false,
+    this.showOnFamilyCalendar = true,
     this.createdAt = '',
     this.updatedAt = '',
   });
@@ -93,53 +142,57 @@ class MedicationRecord {
     bool? isActive,
     bool? showOnFamilyCalendar,
   }) => MedicationRecord(
-    id:             id             ?? this.id,
-    familyId:       familyId       ?? this.familyId,
-    memberId:       memberId       ?? this.memberId,
-    name:           name           ?? this.name,
-    dose:           dose           ?? this.dose,
-    frequency:      frequency      ?? this.frequency,
-    timeOfDay:      timeOfDay      ?? this.timeOfDay,
-    reminderHour:   reminderHour   ?? this.reminderHour,
-    reminderMinute: reminderMinute ?? this.reminderMinute,
-    isActive:       isActive       ?? this.isActive,
-    showOnFamilyCalendar: showOnFamilyCalendar ?? this.showOnFamilyCalendar,
-    createdAt:      this.createdAt,
-    updatedAt:      this.updatedAt,
-  );
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        memberId: memberId ?? this.memberId,
+        name: name ?? this.name,
+        dose: dose ?? this.dose,
+        frequency: frequency ?? this.frequency,
+        timeOfDay: timeOfDay ?? this.timeOfDay,
+        reminderHour: reminderHour ?? this.reminderHour,
+        reminderMinute: reminderMinute ?? this.reminderMinute,
+        isActive: isActive ?? this.isActive,
+        showOnFamilyCalendar:
+            showOnFamilyCalendar ?? this.showOnFamilyCalendar,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
 
   Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'member_id':     memberId,
-    'name':          name,
-    'dose':          dose,
-    'frequency':     frequency,
-    'time_of_day':   timeOfDay,
-    'reminder_hour':   reminderHour,
-    'reminder_minute': reminderMinute,
-    'is_active':     isActive ? 1 : 0,
-    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
-  };
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'member_id': memberId,
+        'name': name,
+        'dose': dose,
+        'frequency': frequency,
+        'time_of_day': timeOfDay,
+        'reminder_hour': reminderHour,
+        'reminder_minute': reminderMinute,
+        'is_active': _boolToInt(isActive),
+        'show_on_calendar': _boolToInt(showOnFamilyCalendar),
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+      };
 
   factory MedicationRecord.fromMap(Map<String, dynamic> m) => MedicationRecord(
-    id:             m['id'] as String?,
-    familyId:       m['family_id'] as String?,
-    memberId:       m['member_id'] as String,
-    name:           m['name'] as String,
-    dose:           m['dose'] as String,
-    frequency:      m['frequency'] as String,
-    timeOfDay:      m['time_of_day'] as String,
-    reminderHour:   (m['reminder_hour'] as int?) ?? 8,
-    reminderMinute: (m['reminder_minute'] as int?) ?? 0,
-    isActive:       ((m['is_active'] as int?) ?? 1) == 1,
-    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
-    createdAt:      m['created_at'] as String? ?? '',
-    updatedAt:      m['updated_at'] as String? ?? '',
-  );
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        memberId: (m['member_id'] ?? '') as String,
+        name: (m['name'] ?? '') as String,
+        dose: (m['dose'] ?? '') as String,
+        frequency: (m['frequency'] ?? '') as String,
+        timeOfDay: (m['time_of_day'] ?? '') as String,
+        reminderHour: (m['reminder_hour'] as num?)?.toInt() ?? 8,
+        reminderMinute: (m['reminder_minute'] as num?)?.toInt() ?? 0,
+        isActive: _readBool(m['is_active'], fallback: true),
+        showOnFamilyCalendar:
+            _readBool(m['show_on_calendar'], fallback: true),
+        createdAt: _readDateString(m['created_at']) ?? '',
+        updatedAt: _readDateString(m['updated_at']) ?? '',
+      );
 }
 
-// ─── VitalRecord ──────────────────────────────────────────────────────────────
+// ─── VitalRecord ────────────────────────────────────────────────────────────
 class VitalRecord {
   final String? id;
   final String? familyId;
@@ -159,27 +212,39 @@ class VitalRecord {
     this.recordedAt = '',
   });
 
+  VitalRecord copyWith({String? id, String? familyId, String? recordedAt}) =>
+      VitalRecord(
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        memberId: memberId,
+        type: type,
+        value: value,
+        unit: unit,
+        recordedAt: recordedAt ?? this.recordedAt,
+      );
+
   Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'member_id': memberId,
-    'type':      type,
-    'value':     value,
-    'unit':      unit,
-  };
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'member_id': memberId,
+        'type': type,
+        'value': value,
+        'unit': unit,
+        if (recordedAt.isNotEmpty) 'recorded_at': recordedAt,
+      };
 
   factory VitalRecord.fromMap(Map<String, dynamic> m) => VitalRecord(
-    id:         m['id'] as String?,
-    familyId:   m['family_id'] as String?,
-    memberId:   m['member_id'] as String,
-    type:       m['type'] as String,
-    value:      (m['value'] as num).toDouble(),
-    unit:       m['unit'] as String,
-    recordedAt: m['recorded_at'] as String? ?? '',
-  );
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        memberId: (m['member_id'] ?? '') as String,
+        type: (m['type'] ?? '') as String,
+        value: (m['value'] as num?)?.toDouble() ?? 0,
+        unit: (m['unit'] ?? '') as String,
+        recordedAt: _readDateString(m['recorded_at']) ?? '',
+      );
 }
 
-// ─── AppointmentRecord ────────────────────────────────────────────────────────
+// ─── AppointmentRecord ──────────────────────────────────────────────────────
 class AppointmentRecord {
   final String? id;
   final String? familyId;
@@ -202,39 +267,70 @@ class AppointmentRecord {
     this.location,
     required this.scheduledAt,
     this.notes,
-    this.showOnFamilyCalendar = false,
+    this.showOnFamilyCalendar = true,
     this.createdAt = '',
     this.updatedAt = '',
   });
 
-  Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'member_id':   memberId,
-    'title':       title,
-    'doctor':      doctor,
-    'location':    location,
-    'scheduled_at': scheduledAt,
-    'notes':       notes,
-    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
-  };
+  AppointmentRecord copyWith({
+    String? id,
+    String? familyId,
+    String? memberId,
+    String? title,
+    String? doctor,
+    String? location,
+    String? scheduledAt,
+    String? notes,
+    bool? showOnFamilyCalendar,
+  }) => AppointmentRecord(
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        memberId: memberId ?? this.memberId,
+        title: title ?? this.title,
+        doctor: doctor ?? this.doctor,
+        location: location ?? this.location,
+        scheduledAt: scheduledAt ?? this.scheduledAt,
+        notes: notes ?? this.notes,
+        showOnFamilyCalendar:
+            showOnFamilyCalendar ?? this.showOnFamilyCalendar,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
 
-  factory AppointmentRecord.fromMap(Map<String, dynamic> m) => AppointmentRecord(
-    id:          m['id'] as String?,
-    familyId:    m['family_id'] as String?,
-    memberId:    m['member_id'] as String,
-    title:       m['title'] as String,
-    doctor:      m['doctor'] as String?,
-    location:    m['location'] as String?,
-    scheduledAt: m['scheduled_at'] as String,
-    notes:       m['notes'] as String?,
-    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
-    createdAt:   m['created_at'] as String? ?? '',
-    updatedAt:   m['updated_at'] as String? ?? '',
-  );
+  Map<String, dynamic> toMap() => {
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'member_id': memberId,
+        'title': title,
+        'doctor': doctor,
+        'location': location,
+        'scheduled_at': scheduledAt,
+        'notes': notes,
+        'show_on_calendar': _boolToInt(showOnFamilyCalendar),
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+      };
+
+  factory AppointmentRecord.fromMap(Map<String, dynamic> m) =>
+      AppointmentRecord(
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        memberId: (m['member_id'] ?? '') as String,
+        title: (m['title'] ?? '') as String,
+        doctor: m['doctor'] as String?,
+        location: m['location'] as String?,
+        scheduledAt: (_readDateString(m['scheduled_at']) ??
+            _readDateString(m['date']) ??
+            ''),
+        notes: m['notes'] as String?,
+        showOnFamilyCalendar:
+            _readBool(m['show_on_calendar'], fallback: true),
+        createdAt: _readDateString(m['created_at']) ?? '',
+        updatedAt: _readDateString(m['updated_at']) ?? '',
+      );
 }
 
-// ─── DocumentRecord ───────────────────────────────────────────────────────────
+// ─── DocumentRecord ─────────────────────────────────────────────────────────
 class DocumentRecord {
   final String? id;
   final String? familyId;
@@ -256,28 +352,41 @@ class DocumentRecord {
     this.updatedAt = '',
   });
 
+  DocumentRecord copyWith({String? id, String? familyId}) => DocumentRecord(
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        memberId: memberId,
+        title: title,
+        filePath: filePath,
+        docType: docType,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
   Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'member_id': memberId,
-    'title':     title,
-    'file_path': filePath,
-    'doc_type':  docType,
-  };
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'member_id': memberId,
+        'title': title,
+        'file_path': filePath,
+        'doc_type': docType,
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+      };
 
   factory DocumentRecord.fromMap(Map<String, dynamic> m) => DocumentRecord(
-    id:        m['id'] as String?,
-    familyId:  m['family_id'] as String?,
-    memberId:  m['member_id'] as String,
-    title:     m['title'] as String,
-    filePath:  m['file_path'] as String,
-    docType:   m['doc_type'] as String,
-    createdAt: m['created_at'] as String? ?? '',
-    updatedAt: m['updated_at'] as String? ?? '',
-  );
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        memberId: (m['member_id'] ?? '') as String,
+        title: (m['title'] ?? '') as String,
+        filePath: (m['file_path'] ?? m['file_url'] ?? '') as String,
+        docType: (m['doc_type'] ?? m['type'] ?? 'document') as String,
+        createdAt: _readDateString(m['created_at']) ?? '',
+        updatedAt: _readDateString(m['updated_at']) ?? '',
+      );
 }
 
-// ─── VaccinationRecord ────────────────────────────────────────────────────────
+// ─── VaccinationRecord ──────────────────────────────────────────────────────
 class VaccinationRecord {
   final String? id;
   final String? familyId;
@@ -285,6 +394,8 @@ class VaccinationRecord {
   final String vaccineName;
   final String? clinicName;
   final String? receivedAt;
+  final String? nextDue;
+  final String? notes;
   final bool isReceived;
   final bool showOnFamilyCalendar;
   final String createdAt;
@@ -297,38 +408,70 @@ class VaccinationRecord {
     required this.vaccineName,
     this.clinicName,
     this.receivedAt,
+    this.nextDue,
+    this.notes,
     this.isReceived = false,
-    this.showOnFamilyCalendar = false,
+    this.showOnFamilyCalendar = true,
     this.createdAt = '',
     this.updatedAt = '',
   });
 
+  VaccinationRecord copyWith({
+    String? id,
+    String? familyId,
+    bool? isReceived,
+    String? receivedAt,
+    String? clinicName,
+  }) => VaccinationRecord(
+        id: id ?? this.id,
+        familyId: familyId ?? this.familyId,
+        memberId: memberId,
+        vaccineName: vaccineName,
+        clinicName: clinicName ?? this.clinicName,
+        receivedAt: receivedAt ?? this.receivedAt,
+        nextDue: nextDue,
+        notes: notes,
+        isReceived: isReceived ?? this.isReceived,
+        showOnFamilyCalendar: showOnFamilyCalendar,
+        createdAt: createdAt,
+        updatedAt: updatedAt,
+      );
+
   Map<String, dynamic> toMap() => {
-    if (id != null)       'id': id,
-    if (familyId != null) 'family_id': familyId,
-    'member_id':   memberId,
-    'vaccine_name': vaccineName,
-    'clinic_name': clinicName,
-    'received_at': receivedAt,
-    'is_received': isReceived ? 1 : 0,
-    'show_on_family_calendar': showOnFamilyCalendar ? 1 : 0,
-  };
+        if (id != null) 'id': id,
+        if (familyId != null) 'family_id': familyId,
+        'member_id': memberId,
+        'vaccine_name': vaccineName,
+        'clinic_name': clinicName,
+        'received_at': receivedAt,
+        'date_given': receivedAt,
+        'next_due': nextDue,
+        'notes': notes,
+        'is_received': _boolToInt(isReceived),
+        'show_on_calendar': _boolToInt(showOnFamilyCalendar),
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+        if (updatedAt.isNotEmpty) 'updated_at': updatedAt,
+      };
 
   factory VaccinationRecord.fromMap(Map<String, dynamic> m) => VaccinationRecord(
-    id:          m['id'] as String?,
-    familyId:    m['family_id'] as String?,
-    memberId:    m['member_id'] as String,
-    vaccineName: m['vaccine_name'] as String,
-    clinicName:  m['clinic_name'] as String?,
-    receivedAt:  m['received_at'] as String?,
-    isReceived:  ((m['is_received'] as int?) ?? 0) == 1,
-    showOnFamilyCalendar: ((m['show_on_family_calendar'] as int?) ?? 0) == 1,
-    createdAt:   m['created_at'] as String? ?? '',
-    updatedAt:   m['updated_at'] as String? ?? '',
-  );
+        id: m['id'] as String?,
+        familyId: m['family_id'] as String?,
+        memberId: (m['member_id'] ?? '') as String,
+        vaccineName: (m['vaccine_name'] ?? '') as String,
+        clinicName: m['clinic_name'] as String?,
+        receivedAt: _readDateString(m['received_at']) ??
+            _readDateString(m['date_given']),
+        nextDue: _readDateString(m['next_due']),
+        notes: m['notes'] as String?,
+        isReceived: _readBool(m['is_received'], fallback: false),
+        showOnFamilyCalendar:
+            _readBool(m['show_on_calendar'], fallback: true),
+        createdAt: _readDateString(m['created_at']) ?? '',
+        updatedAt: _readDateString(m['updated_at']) ?? '',
+      );
 }
 
-// ─── UltrasoundRecord ─────────────────────────────────────────────────────────
+// ─── UltrasoundRecord ───────────────────────────────────────────────────────
 class UltrasoundRecord {
   final int? id;
   final String familyId;
@@ -352,51 +495,109 @@ class UltrasoundRecord {
     this.createdAt = '',
   });
 
-  factory UltrasoundRecord.fromMap(Map<String, dynamic> m) => UltrasoundRecord(
-    id:          m['id'] as int?,
-    familyId:    m['family_id'] as String,
-    memberId:    m['member_id'].toString(),
-    monthLabel:  m['month_label'] as String,
-    sessionType: m['session_type'] as String,
-    date:        m['date'] as String,
-    doctor:      m['doctor'] as String,
-    notes:       m['notes'] as String,
-    createdAt:   m['created_at'] as String? ?? '',
-  );
-
   Map<String, dynamic> toMap() => {
-    if (id != null) 'id': id,
-    'family_id':    familyId,
-    'member_id':    memberId,
-    'month_label':  monthLabel,
-    'session_type': sessionType,
-    'date':         date,
-    'doctor':       doctor,
-    'notes':        notes,
-  };
+        if (id != null) 'id': id,
+        'family_id': familyId,
+        'member_id': memberId,
+        'month_label': monthLabel,
+        'session_type': sessionType,
+        'date': date,
+        'doctor': doctor,
+        'notes': notes,
+        if (createdAt.isNotEmpty) 'created_at': createdAt,
+      };
+
+  factory UltrasoundRecord.fromMap(Map<String, dynamic> m) => UltrasoundRecord(
+        id: m['id'] as int?,
+        familyId: (m['family_id'] ?? '') as String,
+        memberId: (m['member_id'] ?? '') as String,
+        monthLabel: (m['month_label'] ?? '') as String,
+        sessionType: (m['session_type'] ?? '') as String,
+        date: (m['date'] ?? '') as String,
+        doctor: (m['doctor'] ?? '') as String,
+        notes: (m['notes'] ?? '') as String,
+        createdAt: _readDateString(m['created_at']) ?? '',
+      );
 }
 
-// ─── AppRepository ────────────────────────────────────────────────────────────
+// ─── AppRepository ──────────────────────────────────────────────────────────
 class AppRepository {
   AppRepository._();
   static final AppRepository instance = AppRepository._();
   factory AppRepository() => instance;
 
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final RemoteAuthService _authService = RemoteAuthService.instance;
+
   Future<Database> get _db => DatabaseProvider.instance.database;
+
+  String _generateId() {
+    final now = DateTime.now();
+    return '${now.microsecondsSinceEpoch}';
+  }
+
+  Future<String?> _activeFamilyId() => _authService.familyId;
+
+  Future<String> _requiredFamilyId(String? recordFamilyId) async {
+    final id = recordFamilyId ?? await _activeFamilyId();
+    if (id == null || id.isEmpty) {
+      throw Exception('No active family session. Please log in again.');
+    }
+    return id;
+  }
+
+  Future<void> _localUpsert(String table, Map<String, dynamic> data) async {
+    final db = await _db;
+    await db.insert(table, data, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> _localUpdate(
+      String table, String id, Map<String, dynamic> data) async {
+    final db = await _db;
+    await db.update(table, data, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Map<String, dynamic> _cleanForLocal(Map<String, dynamic> data) {
+    final result = <String, dynamic>{};
+    data.forEach((key, value) {
+      if (value is Timestamp) {
+        result[key] = value.toDate().toIso8601String();
+      } else if (value is DateTime) {
+        result[key] = value.toIso8601String();
+      } else if (value is bool) {
+        result[key] = value ? 1 : 0;
+      } else {
+        result[key] = value;
+      }
+    });
+    return result;
+  }
+
+  Future<void> _setFirestoreDoc(
+    String collection,
+    String id,
+    Map<String, dynamic> data, {
+    required bool isNew,
+  }) async {
+    final firestoreData = Map<String, dynamic>.from(data)..remove('id');
+    firestoreData['updated_at'] = FieldValue.serverTimestamp();
+    if (isNew) firestoreData['created_at'] = FieldValue.serverTimestamp();
+    await _firestore
+        .collection(collection)
+        .doc(id)
+        .set(firestoreData, SetOptions(merge: true));
+  }
 
   // ══ Members ════════════════════════════════════════════════════════════════
 
   Future<void> addMember(Map<String, dynamic> memberData) async {
-    final db = await _db;
-    await db.insert('members', memberData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('members', _cleanForLocal(memberData));
   }
 
   Future<void> updateMember(Map<String, dynamic> memberData) async {
-    final db = await _db;
     final id = memberData['id'] as String?;
     if (id == null) throw Exception('Member ID required for update');
-    await db.update('members', memberData, where: 'id = ?', whereArgs: [id]);
+    await _localUpdate('members', id, _cleanForLocal(memberData));
   }
 
   Future<void> deleteMember(String id) async {
@@ -412,41 +613,43 @@ class AppRepository {
 
   Future<List<MemberRecord>> getAllMembers() async {
     final db = await _db;
-    final rows = await db.query('members', orderBy: 'created_at ASC');
+    final rows = await db.query('members', orderBy: 'created_at DESC');
     return rows.map(MemberRecord.fromMap).toList();
   }
 
   Future<List<MemberRecord>> getMembersForFamily(String familyId) async {
     final db = await _db;
     final rows = await db.query('members',
-        where: 'family_id = ?',
-        whereArgs: [familyId],
-        orderBy: 'created_at ASC');
+        where: 'family_id = ?', whereArgs: [familyId], orderBy: 'created_at DESC');
     return rows.map(MemberRecord.fromMap).toList();
   }
 
   Future<String> insertMember(MemberRecord m) async {
-    final db = await _db;
-    final id = _generateId();
-    final mapWithId = m.toMap();
-    mapWithId['id'] = id;
-    await db.insert('members', mapWithId);
+    final id = m.id ?? _generateId();
+    final familyId = await _requiredFamilyId(m.familyId);
+    final saved = m.copyWith(id: id, familyId: familyId);
+    await _localUpsert('members', saved.toMap());
+    await _setFirestoreDoc('members', id, {
+      'family_id': familyId,
+      'name': saved.name,
+      'age': saved.age,
+      'profile_type': saved.profileType,
+      'phone': saved.phone,
+      'user_id': saved.userId,
+    }, isNew: m.id == null);
     return id;
   }
 
   // ══ Medications ════════════════════════════════════════════════════════════
 
   Future<void> addMedication(Map<String, dynamic> medData) async {
-    final db = await _db;
-    await db.insert('medications', medData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('medications', _cleanForLocal(medData));
   }
 
   Future<void> updateMedication(Map<String, dynamic> medData) async {
-    final db = await _db;
     final id = medData['id'] as String?;
     if (id == null) throw Exception('Medication ID required for update');
-    await db.update('medications', medData, where: 'id = ?', whereArgs: [id]);
+    await _localUpdate('medications', id, _cleanForLocal(medData));
   }
 
   Future<MedicationRecord?> getMedicationById(String id) async {
@@ -458,32 +661,62 @@ class AppRepository {
   Future<List<MedicationRecord>> getMedicationsForMember(String memberId) async {
     final db = await _db;
     final rows = await db.query('medications',
-        where: 'member_id = ? AND is_active = 1', whereArgs: [memberId]);
+        where: 'member_id = ? AND is_active = 1',
+        whereArgs: [memberId],
+        orderBy: 'created_at DESC');
     return rows.map(MedicationRecord.fromMap).toList();
   }
 
   Future<void> deleteMedication(String id) async {
     final db = await _db;
-    await db.delete('medications', where: 'id = ?', whereArgs: [id]);
+    await db.update('medications',
+        {'is_active': 0, 'updated_at': DateTime.now().toIso8601String()},
+        where: 'id = ?', whereArgs: [id]);
+    await _firestore.collection('medications').doc(id).set({
+      'is_active': false,
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
-  /// Inserts a new medication, generating a stable ID if the record has none.
-  /// Returns the saved [MedicationRecord] — always with a non-null [id].
   Future<MedicationRecord> insertMedication(MedicationRecord r) async {
-    final db = await _db;
     final id = r.id ?? _generateId();
-    final saved = r.copyWith(id: id);
-    await db.insert('medications', saved.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(id: id, familyId: familyId);
+    await _localUpsert('medications', saved.toMap());
+    await _setFirestoreDoc('medications', id, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'name': saved.name,
+      'dose': saved.dose,
+      'frequency': saved.frequency,
+      'time_of_day': saved.timeOfDay,
+      'is_active': saved.isActive,
+      'show_on_calendar': saved.showOnFamilyCalendar,
+      // Kept in Firebase because the device needs to re-schedule local reminders after login/sync.
+      'reminder_hour': saved.reminderHour,
+      'reminder_minute': saved.reminderMinute,
+    }, isNew: r.id == null);
     return saved;
   }
 
   Future<void> updateMedicationRecord(MedicationRecord r) async {
     if (r.id == null) throw Exception('Medication ID required for update');
-    final db = await _db;
-    final map = r.toMap();
-    map['updated_at'] = DateTime.now().toIso8601String();
-    await db.update('medications', map, where: 'id = ?', whereArgs: [r.id]);
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(familyId: familyId);
+    final map = saved.toMap()..['updated_at'] = DateTime.now().toIso8601String();
+    await _localUpdate('medications', r.id!, map);
+    await _setFirestoreDoc('medications', r.id!, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'name': saved.name,
+      'dose': saved.dose,
+      'frequency': saved.frequency,
+      'time_of_day': saved.timeOfDay,
+      'is_active': saved.isActive,
+      'show_on_calendar': saved.showOnFamilyCalendar,
+      'reminder_hour': saved.reminderHour,
+      'reminder_minute': saved.reminderMinute,
+    }, isNew: false);
   }
 
   Future<int> confirmMedication(String medicationId) async {
@@ -507,16 +740,13 @@ class AppRepository {
   // ══ Vital Signs ════════════════════════════════════════════════════════════
 
   Future<void> addVital(Map<String, dynamic> vitalData) async {
-    final db = await _db;
-    await db.insert('vital_signs', vitalData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('vital_signs', _cleanForLocal(vitalData));
   }
 
   Future<void> updateVital(Map<String, dynamic> vitalData) async {
-    final db = await _db;
     final id = vitalData['id'] as String?;
     if (id == null) throw Exception('Vital ID required for update');
-    await db.update('vital_signs', vitalData, where: 'id = ?', whereArgs: [id]);
+    await _localUpdate('vital_signs', id, _cleanForLocal(vitalData));
   }
 
   Future<VitalRecord?> getVitalById(String id) async {
@@ -527,7 +757,23 @@ class AppRepository {
 
   Future<int> insertVital(VitalRecord r) async {
     final db = await _db;
-    return db.insert('vital_signs', r.toMap());
+    final id = r.id ?? _generateId();
+    final familyId = await _requiredFamilyId(r.familyId);
+    final recordedAt = r.recordedAt.isNotEmpty
+        ? r.recordedAt
+        : DateTime.now().toIso8601String();
+    final saved = r.copyWith(id: id, familyId: familyId, recordedAt: recordedAt);
+    final localId = await db.insert('vital_signs', saved.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _setFirestoreDoc('vital_signs', id, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'type': saved.type,
+      'value': saved.value,
+      'unit': saved.unit,
+      'recorded_at': saved.recordedAt,
+    }, isNew: r.id == null);
+    return localId;
   }
 
   Future<List<VitalRecord>> getVitalsForMember(String memberId,
@@ -552,7 +798,7 @@ class AppRepository {
 
   Future<int> insertUltrasound(UltrasoundRecord r) async {
     final db = await _db;
-    return db.insert('ultrasounds', r.toMap());
+    return db.insert('ultrasounds', r.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<UltrasoundRecord>> getUltrasoundsForMember(String memberId) async {
@@ -572,18 +818,48 @@ class AppRepository {
   // ══ Appointments ═══════════════════════════════════════════════════════════
 
   Future<void> addAppointment(Map<String, dynamic> apptData) async {
-    final db = await _db;
-    await db.insert('appointments', apptData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('appointments', _cleanForLocal(_normalizeAppointmentMap(apptData)));
   }
 
   Future<void> updateAppointment(Map<String, dynamic> apptData) async {
-    final db = await _db;
     final id = apptData['id'] as String?;
-    if (id == null || id.isEmpty) throw Exception('Appointment ID required for update');
-    final data = Map<String, dynamic>.from(apptData);
-    data['updated_at'] = DateTime.now().toIso8601String();
-    await db.update('appointments', data, where: 'id = ?', whereArgs: [id]);
+    if (id == null || id.isEmpty) {
+      throw Exception('Appointment ID required for update');
+    }
+
+    final normalized = _normalizeAppointmentMap(apptData);
+    final localMap = _cleanForLocal(normalized);
+    await _localUpdate('appointments', id, localMap);
+
+    // Keep this legacy Map-based update Firebase-backed as well. Some screens
+    // still call updateAppointment(record.toMap()), so updating only SQLite here
+    // makes edits disappear after the next Firebase sync.
+    final familyId = await _requiredFamilyId(localMap['family_id'] as String?);
+    final record = AppointmentRecord.fromMap({
+      ...localMap,
+      'id': id,
+      'family_id': familyId,
+    });
+
+    await _setFirestoreDoc('appointments', id, {
+      'family_id': familyId,
+      'member_id': record.memberId,
+      'title': record.title,
+      'date': record.scheduledAt,
+      'doctor': record.doctor,
+      'notes': record.notes,
+      'show_on_calendar': record.showOnFamilyCalendar,
+      'location': record.location,
+    }, isNew: false);
+  }
+
+  Map<String, dynamic> _normalizeAppointmentMap(Map<String, dynamic> data) {
+    final result = Map<String, dynamic>.from(data);
+    result['scheduled_at'] = _readDateString(result['scheduled_at']) ??
+        _readDateString(result['date']) ??
+        DateTime.now().toIso8601String();
+    result.remove('date');
+    return result;
   }
 
   Future<AppointmentRecord?> getAppointmentById(String id) async {
@@ -594,15 +870,45 @@ class AppRepository {
 
   Future<int> insertAppointment(AppointmentRecord r) async {
     final db = await _db;
-    final map = r.toMap();
-    map['id'] = r.id ?? _generateId();
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return db.insert('appointments', map, conflictAlgorithm: ConflictAlgorithm.replace);
+    final id = r.id ?? _generateId();
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(id: id, familyId: familyId);
+    final localId = await db.insert('appointments', saved.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _setFirestoreDoc('appointments', id, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'title': saved.title,
+      'date': saved.scheduledAt,
+      'doctor': saved.doctor,
+      'notes': saved.notes,
+      'show_on_calendar': saved.showOnFamilyCalendar,
+      // Existing app field; safe extension for UI display.
+      'location': saved.location,
+    }, isNew: r.id == null);
+    return localId;
+  }
+
+  Future<void> updateAppointmentRecord(AppointmentRecord r) async {
+    if (r.id == null) throw Exception('Appointment ID required for update');
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(familyId: familyId);
+    final map = saved.toMap()..['updated_at'] = DateTime.now().toIso8601String();
+    await _localUpdate('appointments', r.id!, map);
+    await _setFirestoreDoc('appointments', r.id!, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'title': saved.title,
+      'date': saved.scheduledAt,
+      'doctor': saved.doctor,
+      'notes': saved.notes,
+      'show_on_calendar': saved.showOnFamilyCalendar,
+      'location': saved.location,
+    }, isNew: false);
   }
 
   Future<List<AppointmentRecord>> getAppointmentsForMember(String memberId) async {
     final db = await _db;
-    await _ensureAppointmentIds(db);
     final rows = await db.query('appointments',
         where: 'member_id = ?',
         whereArgs: [memberId],
@@ -612,7 +918,6 @@ class AppRepository {
 
   Future<List<AppointmentRecord>> getUpcomingAppointments() async {
     final db = await _db;
-    await _ensureAppointmentIds(db);
     final now = DateTime.now().toIso8601String();
     final rows = await db.query('appointments',
         where: 'scheduled_at >= ?',
@@ -625,21 +930,28 @@ class AppRepository {
   Future<void> deleteAppointment(String id) async {
     final db = await _db;
     await db.delete('appointments', where: 'id = ?', whereArgs: [id]);
+    await _firestore.collection('appointments').doc(id).delete();
   }
 
   // ══ Documents ══════════════════════════════════════════════════════════════
 
   Future<void> addDocument(Map<String, dynamic> docData) async {
-    final db = await _db;
-    await db.insert('documents', docData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('documents', _cleanForLocal(_normalizeDocumentMap(docData)));
   }
 
   Future<void> updateDocument(Map<String, dynamic> docData) async {
-    final db = await _db;
     final id = docData['id'] as String?;
     if (id == null) throw Exception('Document ID required for update');
-    await db.update('documents', docData, where: 'id = ?', whereArgs: [id]);
+    await _localUpdate('documents', id, _cleanForLocal(_normalizeDocumentMap(docData)));
+  }
+
+  Map<String, dynamic> _normalizeDocumentMap(Map<String, dynamic> data) {
+    final result = Map<String, dynamic>.from(data);
+    result['file_path'] = result['file_path'] ?? result['file_url'] ?? '';
+    result['doc_type'] = result['doc_type'] ?? result['type'] ?? 'document';
+    result.remove('file_url');
+    result.remove('type');
+    return result;
   }
 
   Future<DocumentRecord?> getDocumentById(String id) async {
@@ -650,7 +962,19 @@ class AppRepository {
 
   Future<int> insertDocument(DocumentRecord r) async {
     final db = await _db;
-    return db.insert('documents', r.toMap());
+    final id = r.id ?? _generateId();
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(id: id, familyId: familyId);
+    final localId = await db.insert('documents', saved.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _setFirestoreDoc('documents', id, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'title': saved.title,
+      'type': saved.docType,
+      'file_url': saved.filePath,
+    }, isNew: r.id == null);
+    return localId;
   }
 
   Future<List<DocumentRecord>> getDocumentsForMember(String memberId) async {
@@ -665,21 +989,27 @@ class AppRepository {
   Future<void> deleteDocument(String id) async {
     final db = await _db;
     await db.delete('documents', where: 'id = ?', whereArgs: [id]);
+    await _firestore.collection('documents').doc(id).delete();
   }
 
   // ══ Vaccinations ═══════════════════════════════════════════════════════════
 
   Future<void> addVaccination(Map<String, dynamic> vacData) async {
-    final db = await _db;
-    await db.insert('vaccinations', vacData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _localUpsert('vaccinations', _cleanForLocal(_normalizeVaccinationMap(vacData)));
   }
 
   Future<void> updateVaccination(Map<String, dynamic> vacData) async {
-    final db = await _db;
     final id = vacData['id'] as String?;
     if (id == null) throw Exception('Vaccination ID required for update');
-    await db.update('vaccinations', vacData, where: 'id = ?', whereArgs: [id]);
+    await _localUpdate('vaccinations', id, _cleanForLocal(_normalizeVaccinationMap(vacData)));
+  }
+
+  Map<String, dynamic> _normalizeVaccinationMap(Map<String, dynamic> data) {
+    final result = Map<String, dynamic>.from(data);
+    result['received_at'] = _readDateString(result['received_at']) ??
+        _readDateString(result['date_given']);
+    result['is_received'] = result['is_received'] ?? (result['received_at'] != null ? 1 : 0);
+    return result;
   }
 
   Future<VaccinationRecord?> getVaccinationById(String id) async {
@@ -690,7 +1020,23 @@ class AppRepository {
 
   Future<int> insertVaccination(VaccinationRecord r) async {
     final db = await _db;
-    return db.insert('vaccinations', r.toMap());
+    final id = r.id ?? _generateId();
+    final familyId = await _requiredFamilyId(r.familyId);
+    final saved = r.copyWith(id: id, familyId: familyId);
+    final localId = await db.insert('vaccinations', saved.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+    await _setFirestoreDoc('vaccinations', id, {
+      'family_id': familyId,
+      'member_id': saved.memberId,
+      'vaccine_name': saved.vaccineName,
+      'date_given': saved.receivedAt,
+      'next_due': saved.nextDue,
+      'notes': saved.notes,
+      'show_on_calendar': saved.showOnFamilyCalendar,
+      'clinic_name': saved.clinicName,
+      'is_received': saved.isReceived,
+    }, isNew: r.id == null);
+    return localId;
   }
 
   Future<List<VaccinationRecord>> getVaccinationsForMember(String memberId) async {
@@ -703,18 +1049,30 @@ class AppRepository {
   Future<int> markVaccinationReceived(String id,
       {required String clinicName, required String receivedAt}) async {
     final db = await _db;
-    return db.update(
+    final result = await db.update(
       'vaccinations',
-      {'is_received': 1, 'clinic_name': clinicName, 'received_at': receivedAt},
+      {
+        'is_received': 1,
+        'clinic_name': clinicName,
+        'received_at': receivedAt,
+        'date_given': receivedAt,
+        'updated_at': DateTime.now().toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [id],
     );
+    await _firestore.collection('vaccinations').doc(id).set({
+      'clinic_name': clinicName,
+      'date_given': receivedAt,
+      'is_received': true,
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    return result;
   }
 
   // ══ Prenatal Tests ═════════════════════════════════════════════════════════
 
-  Future<List<Map<String, dynamic>>> getPrenatalTestsForMember(
-      String memberId) async {
+  Future<List<Map<String, dynamic>>> getPrenatalTestsForMember(String memberId) async {
     final db = await _db;
     final rows = await db.query('prenatal_tests',
         where: 'member_id = ?',
@@ -724,162 +1082,87 @@ class AppRepository {
   }
 
   Future<void> completePrenatalTest(String testId) async {
+    final completedAt = DateTime.now().toIso8601String();
     final db = await _db;
     await db.update(
       'prenatal_tests',
-      {'is_completed': 1, 'completed_at': DateTime.now().toIso8601String()},
+      {'is_completed': 1, 'completed_at': completedAt},
       where: 'id = ?',
       whereArgs: [testId],
     );
+    await _firestore.collection('prenatal_tests').doc(testId).set({
+      'is_completed': true,
+      'completed_at': completedAt,
+      'updated_at': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   Future<void> insertPrenatalTest(Map<String, dynamic> testData) async {
-    final db = await _db;
-    await db.insert('prenatal_tests', testData,
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    final id = testData['id'] as String? ?? _generateId();
+    final data = Map<String, dynamic>.from(testData)..['id'] = id;
+    data['is_completed'] = _readBool(data['is_completed']) ? 1 : 0;
+    await _localUpsert('prenatal_tests', _cleanForLocal(data));
+  }
+
+  Future<void> upsertPrenatalTestToFirebase(Map<String, dynamic> testData) async {
+    final id = testData['id'] as String? ?? _generateId();
+    final familyId = await _requiredFamilyId(testData['family_id'] as String?);
+    await insertPrenatalTest({...testData, 'id': id, 'family_id': familyId});
+    await _setFirestoreDoc('prenatal_tests', id, {
+      'family_id': familyId,
+      'member_id': testData['member_id'],
+      'trimester': testData['trimester'],
+      'test_name': testData['test_name'],
+      'is_completed': _readBool(testData['is_completed']),
+      'completed_at': testData['completed_at'],
+    }, isNew: testData['id'] == null);
   }
 
   // ══ Calendar ═══════════════════════════════════════════════════════════════
 
-  Future<List<Map<String, dynamic>>> getCalendarEventsForFamily(
-      String familyId) async {
+  Future<List<Map<String, dynamic>>> getCalendarEventsForFamily(String familyId) async {
     final db = await _db;
-    final all = <Map<String, dynamic>>[];
 
     final apptRows = await db.rawQuery('''
-      SELECT a.id,
-             a.family_id,
-             a.member_id,
-             m.name as member_name,
-             m.profile_type as member_profile_type,
-             'appointment' as event_type,
-             a.title as event_title,
-             a.scheduled_at as event_date,
-             strftime('%H:%M', a.scheduled_at) as event_time,
-             a.doctor,
-             a.location,
-             a.notes,
-             a.id as source_id,
-             a.created_at,
-             a.updated_at
+      SELECT a.id, a.member_id, m.name AS member_name, m.profile_type AS member_profile_type,
+             a.title, a.scheduled_at AS event_date,
+             a.doctor, a.notes, 'appointment' AS event_type
       FROM appointments a
       LEFT JOIN members m ON m.id = a.member_id
-      WHERE a.family_id = ? AND COALESCE(a.show_on_family_calendar, 0) = 1
+      WHERE a.family_id = ? AND COALESCE(a.show_on_calendar, 1) = 1
     ''', [familyId]);
-    all.addAll(apptRows.map((r) => Map<String, dynamic>.from(r)));
 
     final medRows = await db.rawQuery('''
-      SELECT med.id,
-             med.family_id,
-             med.member_id,
-             m.name as member_name,
-             m.profile_type as member_profile_type,
-             CASE WHEN m.profile_type = 'child' THEN 'childMedication' ELSE 'medicationReminder' END as event_type,
-             med.name || ' • ' || med.dose as event_title,
-             datetime('now') as event_date,
-             printf('%02d:%02d', med.reminder_hour, med.reminder_minute) as event_time,
-             med.dose,
-             med.frequency,
-             med.time_of_day,
-             med.reminder_hour,
-             med.reminder_minute,
-             med.id as source_id,
-             med.created_at,
-             med.updated_at
-      FROM medications med
-      LEFT JOIN members m ON m.id = med.member_id
-      WHERE med.family_id = ?
-        AND med.is_active = 1
-        AND COALESCE(med.show_on_family_calendar, 0) = 1
+      SELECT md.id, md.member_id, m.name AS member_name, m.profile_type AS member_profile_type,
+             md.name AS title, md.time_of_day AS event_date,
+             NULL AS doctor, md.dose AS notes, 'medication' AS event_type
+      FROM medications md
+      LEFT JOIN members m ON m.id = md.member_id
+      WHERE md.family_id = ? AND md.is_active = 1 AND COALESCE(md.show_on_calendar, 1) = 1
     ''', [familyId]);
-    all.addAll(medRows.map((r) => Map<String, dynamic>.from(r)));
 
     final vacRows = await db.rawQuery('''
-      SELECT v.id,
-             v.family_id,
-             v.member_id,
-             m.name as member_name,
-             m.profile_type as member_profile_type,
-             'vaccinationReminder' as event_type,
-             v.vaccine_name as event_title,
-             COALESCE(v.received_at, v.created_at) as event_date,
-             NULL as event_time,
-             v.clinic_name,
-             v.received_at,
-             v.is_received,
-             v.id as source_id,
-             v.created_at,
-             v.updated_at
+      SELECT v.id, v.member_id, m.name AS member_name, m.profile_type AS member_profile_type,
+             v.vaccine_name AS title,
+             COALESCE(v.next_due, v.received_at, v.date_given) AS event_date,
+             NULL AS doctor, v.notes AS notes, 'vaccination' AS event_type
       FROM vaccinations v
       LEFT JOIN members m ON m.id = v.member_id
-      WHERE v.family_id = ? AND COALESCE(v.show_on_family_calendar, 0) = 1
+      WHERE v.family_id = ? AND COALESCE(v.show_on_calendar, 1) = 1
     ''', [familyId]);
-    all.addAll(vacRows.map((r) => Map<String, dynamic>.from(r)));
 
-    if (await _tableExists(db, 'family_reminders')) {
-      final familyReminderRows = await db.rawQuery('''
-        SELECT fr.id,
-               fr.family_id,
-               COALESCE(fr.member_id, '') as member_id,
-               COALESCE(m.name, 'Family') as member_name,
-               m.profile_type as member_profile_type,
-               'familyReminder' as event_type,
-               COALESCE(fr.title, fr.name, 'Family reminder') as event_title,
-               COALESCE(fr.scheduled_at, fr.remind_at, fr.date, fr.created_at) as event_date,
-               fr.id as source_id,
-               fr.created_at,
-               COALESCE(fr.updated_at, fr.created_at) as updated_at
-        FROM family_reminders fr
-        LEFT JOIN members m ON m.id = fr.member_id
-        WHERE fr.family_id = ? AND COALESCE(fr.show_on_family_calendar, 0) = 1
-      ''', [familyId]);
-      all.addAll(familyReminderRows.map((r) => Map<String, dynamic>.from(r)));
-    }
+    final all = [
+      ...apptRows,
+      ...medRows,
+      ...vacRows,
+    ].map((r) => Map<String, dynamic>.from(r)).toList();
 
     all.sort((a, b) {
-      final da = '${a['event_date'] ?? ''} ${a['event_time'] ?? ''}';
-      final db2 = '${b['event_date'] ?? ''} ${b['event_time'] ?? ''}';
+      final da = a['event_date'] as String? ?? '';
+      final db2 = b['event_date'] as String? ?? '';
       return da.compareTo(db2);
     });
 
     return all;
-  }
-
-  Future<bool> _tableExists(Database db, String tableName) async {
-    final rows = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-      [tableName],
-    );
-    return rows.isNotEmpty;
-  }
-
-  Future<void> _ensureAppointmentIds(Database db) async {
-    final rows = await db.query(
-      'appointments',
-      columns: ['rowid'],
-      where: "id IS NULL OR id = ''",
-    );
-
-    for (final row in rows) {
-      final rowId = row['rowid'];
-      if (rowId == null) continue;
-      await db.update(
-        'appointments',
-        {
-          'id': _generateId(),
-          'updated_at': DateTime.now().toIso8601String(),
-        },
-        where: 'rowid = ?',
-        whereArgs: [rowId],
-      );
-    }
-  }
-
-  // ── Private helpers ────────────────────────────────────────────────────────
-  String _generateId() {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = List<int>.generate(
-        8, (_) => DateTime.now().microsecond % 256);
-    return '$timestamp${random.map((e) => e.toRadixString(16).padLeft(2, '0')).join()}';
   }
 }

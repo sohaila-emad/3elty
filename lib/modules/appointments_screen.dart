@@ -225,14 +225,14 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         doctor: result.doctor,
         location: result.location,
         scheduledAt: result.scheduledAt.toIso8601String(),
-        notes: existing?.notes,
+        notes: result.notes,
         showOnFamilyCalendar: result.showOnFamilyCalendar,
         createdAt: existing?.createdAt ?? '',
         updatedAt: existing?.updatedAt ?? '',
       );
 
       if (isEditing) {
-        await _repo.updateAppointment(record.toMap());
+        await _repo.updateAppointmentRecord(record);
       } else {
         await _repo.insertAppointment(record);
       }
@@ -589,6 +589,15 @@ class _AppointmentListCard extends StatelessWidget {
                     style: const TextStyle(fontSize: 13, color: AppColors.grey600),
                   ),
               ],
+              if (appointment.notes != null && appointment.notes!.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'ملاحظات: ${appointment.notes}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 13, color: AppColors.grey600),
+                ),
+              ],
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -650,6 +659,7 @@ class _AppointmentFormSheetState extends State<_AppointmentFormSheet> {
   late final TextEditingController _titleCtrl;
   late final TextEditingController _doctorCtrl;
   late final TextEditingController _locationCtrl;
+  late final TextEditingController _notesCtrl;
 
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
@@ -669,6 +679,7 @@ class _AppointmentFormSheetState extends State<_AppointmentFormSheet> {
     _titleCtrl = TextEditingController(text: appointment?.title ?? '');
     _doctorCtrl = TextEditingController(text: appointment?.doctor ?? '');
     _locationCtrl = TextEditingController(text: appointment?.location ?? '');
+    _notesCtrl = TextEditingController(text: appointment?.notes ?? '');
 
     if (parsedDateTime != null) {
       _selectedDate = DateTime(
@@ -696,6 +707,7 @@ class _AppointmentFormSheetState extends State<_AppointmentFormSheet> {
     _titleCtrl.dispose();
     _doctorCtrl.dispose();
     _locationCtrl.dispose();
+    _notesCtrl.dispose();
     super.dispose();
   }
 
@@ -794,6 +806,7 @@ class _AppointmentFormSheetState extends State<_AppointmentFormSheet> {
       title: title,
       doctor: _doctorCtrl.text.trim().isEmpty ? null : _doctorCtrl.text.trim(),
       location: _locationCtrl.text.trim().isEmpty ? null : _locationCtrl.text.trim(),
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       memberId: _selectedMemberId,
       scheduledAt: scheduledAt,
       showOnFamilyCalendar: _showOnFamilyCalendar,
@@ -883,9 +896,21 @@ class _AppointmentFormSheetState extends State<_AppointmentFormSheet> {
             const SizedBox(height: 14),
             TextField(
               controller: _locationCtrl,
-              textInputAction: TextInputAction.done,
+              textInputAction: TextInputAction.next,
               decoration: _buildInputDecoration(
                 'المكان',
+                'اختياري',
+                selectedColor,
+              ),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: _notesCtrl,
+              minLines: 2,
+              maxLines: 4,
+              textInputAction: TextInputAction.done,
+              decoration: _buildInputDecoration(
+                'ملاحظات',
                 'اختياري',
                 selectedColor,
               ),
@@ -1035,6 +1060,7 @@ class _AppointmentFormResult {
   final String title;
   final String? doctor;
   final String? location;
+  final String? notes;
   final String memberId;
   final DateTime scheduledAt;
   final bool showOnFamilyCalendar;
@@ -1043,6 +1069,7 @@ class _AppointmentFormResult {
     required this.title,
     required this.doctor,
     required this.location,
+    required this.notes,
     required this.memberId,
     required this.scheduledAt,
     required this.showOnFamilyCalendar,

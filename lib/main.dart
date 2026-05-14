@@ -176,6 +176,14 @@ List<HealthModule> modulesFor(ProfileType type) {
     case ProfileType.child:
       return const [
         HealthModule(
+          id: 'medications',
+          title: 'أدوية الطفل',
+          subtitle: 'تتبع جرعات الطفل وتنبيهات الدواء',
+          icon: Icons.medication_rounded,
+          color: Color(0xFF1565C0),
+          bgColor: Color(0xFFE3F2FD),
+        ),
+        HealthModule(
           id: 'vaccines',
           title: 'جدول التطعيمات',
           subtitle: 'تقويم وزارة الصحة مع الدفتر الرقمي',

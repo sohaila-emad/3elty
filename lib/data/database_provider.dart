@@ -1,157 +1,166 @@
-import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
 
-/// Single source of truth for the SQLite database.
-/// Call [DatabaseProvider.instance.database] anywhere to get the [Database].
+/// Single source of truth for the local SQLite cache.
+///
+/// Firebase/Firestore remains the source of truth for family and medical data.
+/// SQLite is kept as an offline/cache layer so the UI can keep reading data
+/// locally and local reminders can still work after sync.
 class DatabaseProvider {
   DatabaseProvider._();
   static final DatabaseProvider instance = DatabaseProvider._();
 
   static Database? _db;
 
+  static const _dbName = 'e3lty.db';
+  static const _dbVersion = 8;
+
   Future<Database> get database async {
     _db ??= await _open();
     return _db!;
   }
 
-  static const _dbName    = 'e3lty.db';
-  static const _dbVersion = 7; // v7: ensure members.phone/user_id columns for Firestore sync
-
   Future<Database> _open() async {
     final dbPath = await getDatabasesPath();
-    final path   = join(dbPath, _dbName);
+    final path = join(dbPath, _dbName);
 
     return openDatabase(
       path,
       version: _dbVersion,
+      onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
-      // Enable foreign-key enforcement
-      onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
     );
   }
-
-  // ── Schema ─────────────────────────────────────────────────────────────────
 
   Future<void> _onCreate(Database db, int version) async {
     final batch = db.batch();
 
-    // Family members
     batch.execute('''
       CREATE TABLE members (
-        id          TEXT    PRIMARY KEY,
-        family_id   TEXT    NOT NULL,
-        name        TEXT    NOT NULL,
-        age         INTEGER NOT NULL,
-        profile_type TEXT   NOT NULL,
-        user_id     TEXT,
-        phone       TEXT,
-        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        id            TEXT PRIMARY KEY,
+        family_id     TEXT NOT NULL,
+        name          TEXT NOT NULL,
+        age           INTEGER NOT NULL DEFAULT 0,
+        profile_type  TEXT NOT NULL DEFAULT 'adult',
+        phone         TEXT,
+        user_id       TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Medications (linked to a member)
     batch.execute('''
       CREATE TABLE medications (
-        id          TEXT    PRIMARY KEY,
-        family_id   TEXT    NOT NULL,
-        member_id   TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        name        TEXT    NOT NULL,
-        dose        TEXT    NOT NULL,
-        frequency   TEXT    NOT NULL,
-        time_of_day TEXT    NOT NULL,
-        reminder_hour   INTEGER NOT NULL DEFAULT 8,
-        reminder_minute INTEGER NOT NULL DEFAULT 0,
-        is_active   INTEGER NOT NULL DEFAULT 1,
-        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
-        created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+        id               TEXT PRIMARY KEY,
+        family_id        TEXT NOT NULL,
+        member_id        TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        name             TEXT NOT NULL,
+        dose             TEXT NOT NULL,
+        frequency        TEXT NOT NULL,
+        time_of_day      TEXT NOT NULL,
+        reminder_hour    INTEGER NOT NULL DEFAULT 8,
+        reminder_minute  INTEGER NOT NULL DEFAULT 0,
+        is_active        INTEGER NOT NULL DEFAULT 1,
+        show_on_calendar INTEGER NOT NULL DEFAULT 1,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Daily medication confirmations
     batch.execute('''
       CREATE TABLE med_confirmations (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        medication_id TEXT    NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
-        confirmed_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-        date          TEXT    NOT NULL
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        medication_id   TEXT NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
+        confirmed_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        date            TEXT NOT NULL
       )
     ''');
 
-    // Vital signs
     batch.execute('''
       CREATE TABLE vital_signs (
-        id          TEXT    PRIMARY KEY,
-        family_id   TEXT    NOT NULL,
-        member_id   TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        type        TEXT    NOT NULL,
-        value       REAL    NOT NULL,
-        unit        TEXT    NOT NULL,
-        recorded_at TEXT    NOT NULL DEFAULT (datetime('now'))
+        id           TEXT PRIMARY KEY,
+        family_id    TEXT NOT NULL,
+        member_id    TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        type         TEXT NOT NULL,
+        value        REAL NOT NULL,
+        unit         TEXT NOT NULL,
+        recorded_at  TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Appointments
     batch.execute('''
       CREATE TABLE appointments (
-        id           TEXT    PRIMARY KEY,
-        family_id    TEXT    NOT NULL,
-        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        title        TEXT    NOT NULL,
-        doctor       TEXT,
-        location     TEXT,
-        scheduled_at TEXT    NOT NULL,
-        notes        TEXT,
-        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
-        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        id               TEXT PRIMARY KEY,
+        family_id        TEXT NOT NULL,
+        member_id        TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        title            TEXT NOT NULL,
+        doctor           TEXT,
+        location         TEXT,
+        scheduled_at     TEXT NOT NULL,
+        notes            TEXT,
+        show_on_calendar INTEGER NOT NULL DEFAULT 1,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Medical documents (images / PDFs stored on device; only path saved here)
     batch.execute('''
       CREATE TABLE documents (
-        id           TEXT    PRIMARY KEY,
-        family_id    TEXT    NOT NULL,
-        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        title        TEXT    NOT NULL,
-        file_path    TEXT    NOT NULL,
-        doc_type     TEXT    NOT NULL,
-        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        id          TEXT PRIMARY KEY,
+        family_id   TEXT NOT NULL,
+        member_id   TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        title       TEXT NOT NULL,
+        file_path   TEXT NOT NULL,
+        doc_type    TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Vaccination records (child module)
     batch.execute('''
       CREATE TABLE vaccinations (
-        id           TEXT    PRIMARY KEY,
-        family_id    TEXT    NOT NULL,
-        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        vaccine_name TEXT    NOT NULL,
-        clinic_name  TEXT,
-        received_at  TEXT,
-        is_received  INTEGER NOT NULL DEFAULT 0,
-        show_on_family_calendar INTEGER NOT NULL DEFAULT 0,
-        created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-        updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        id               TEXT PRIMARY KEY,
+        family_id        TEXT NOT NULL,
+        member_id        TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        vaccine_name     TEXT NOT NULL,
+        clinic_name      TEXT,
+        received_at      TEXT,
+        date_given       TEXT,
+        next_due         TEXT,
+        notes            TEXT,
+        is_received      INTEGER NOT NULL DEFAULT 0,
+        show_on_calendar INTEGER NOT NULL DEFAULT 1,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
-    // Ultrasound records (pregnancy module)
+    batch.execute('''
+      CREATE TABLE prenatal_tests (
+        id            TEXT PRIMARY KEY,
+        family_id     TEXT NOT NULL,
+        member_id     TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        trimester     INTEGER NOT NULL,
+        test_name     TEXT NOT NULL,
+        is_completed  INTEGER NOT NULL DEFAULT 0,
+        completed_at  TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
+
     batch.execute('''
       CREATE TABLE ultrasounds (
-        id           INTEGER PRIMARY KEY AUTOINCREMENT,
-        family_id    TEXT    NOT NULL,
-        member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-        month_label  TEXT    NOT NULL,
-        session_type TEXT    NOT NULL,
-        date         TEXT    NOT NULL,
-        doctor       TEXT    NOT NULL DEFAULT '',
-        notes        TEXT    NOT NULL DEFAULT '',
-        created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        family_id     TEXT NOT NULL,
+        member_id     TEXT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+        month_label   TEXT NOT NULL,
+        session_type  TEXT NOT NULL,
+        date          TEXT NOT NULL,
+        doctor        TEXT NOT NULL DEFAULT '',
+        notes         TEXT NOT NULL DEFAULT '',
+        created_at    TEXT NOT NULL DEFAULT (datetime('now'))
       )
     ''');
 
@@ -160,203 +169,64 @@ class DatabaseProvider {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Migration from v1 to v2: add family_id support
-      final batch = db.batch();
-
-      // Recreate tables with family_id
-      batch.execute('DROP TABLE IF EXISTS vaccinations');
-      batch.execute('DROP TABLE IF EXISTS documents');
-      batch.execute('DROP TABLE IF EXISTS appointments');
-      batch.execute('DROP TABLE IF EXISTS vital_signs');
-      batch.execute('DROP TABLE IF EXISTS med_confirmations');
-      batch.execute('DROP TABLE IF EXISTS medications');
-      batch.execute('DROP TABLE IF EXISTS members');
-
-      // Recreate with new schema (same as _onCreate v2 schema)
-      batch.execute('''
-        CREATE TABLE members (
-          id          TEXT    PRIMARY KEY,
-          family_id   TEXT    NOT NULL,
-          name        TEXT    NOT NULL,
-          age         INTEGER NOT NULL,
-          profile_type TEXT   NOT NULL,
-          user_id     TEXT,
-          phone       TEXT,
-          created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-          updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE medications (
-          id          TEXT    PRIMARY KEY,
-          family_id   TEXT    NOT NULL,
-          member_id   TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          name        TEXT    NOT NULL,
-          dose        TEXT    NOT NULL,
-          frequency   TEXT    NOT NULL,
-          time_of_day TEXT    NOT NULL,
-          reminder_hour   INTEGER NOT NULL DEFAULT 8,
-          reminder_minute INTEGER NOT NULL DEFAULT 0,
-          is_active   INTEGER NOT NULL DEFAULT 1,
-          created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-          updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE med_confirmations (
-          id            INTEGER PRIMARY KEY AUTOINCREMENT,
-          medication_id TEXT    NOT NULL REFERENCES medications(id) ON DELETE CASCADE,
-          confirmed_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-          date          TEXT    NOT NULL
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE vital_signs (
-          id          TEXT    PRIMARY KEY,
-          family_id   TEXT    NOT NULL,
-          member_id   TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          type        TEXT    NOT NULL,
-          value       REAL    NOT NULL,
-          unit        TEXT    NOT NULL,
-          recorded_at TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE appointments (
-          id           TEXT    PRIMARY KEY,
-          family_id    TEXT    NOT NULL,
-          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          title        TEXT    NOT NULL,
-          doctor       TEXT,
-          location     TEXT,
-          scheduled_at TEXT    NOT NULL,
-          notes        TEXT,
-          created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-          updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE documents (
-          id           TEXT    PRIMARY KEY,
-          family_id    TEXT    NOT NULL,
-          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          title        TEXT    NOT NULL,
-          file_path    TEXT    NOT NULL,
-          doc_type     TEXT    NOT NULL,
-          created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-          updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE vaccinations (
-          id           TEXT    PRIMARY KEY,
-          family_id    TEXT    NOT NULL,
-          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          vaccine_name TEXT    NOT NULL,
-          clinic_name  TEXT,
-          received_at  TEXT,
-          is_received  INTEGER NOT NULL DEFAULT 0,
-          created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
-          updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      batch.execute('''
-        CREATE TABLE ultrasounds (
-          id           INTEGER PRIMARY KEY AUTOINCREMENT,
-          family_id    TEXT    NOT NULL,
-          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          month_label  TEXT    NOT NULL,
-          session_type TEXT    NOT NULL,
-          date         TEXT    NOT NULL,
-          doctor       TEXT    NOT NULL DEFAULT '',
-          notes        TEXT    NOT NULL DEFAULT '',
-          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-
-      await batch.commit(noResult: true);
+      await _dropAllKnownTables(db);
+      await _onCreate(db, newVersion);
+      return;
     }
 
-    // ── Migration v2 → v3: إضافة جدول ultrasounds ──────────────────────────
-    if (oldVersion < 3) {
-      await db.execute('''
-        CREATE TABLE IF NOT EXISTS ultrasounds (
-          id           INTEGER PRIMARY KEY AUTOINCREMENT,
-          family_id    TEXT    NOT NULL,
-          member_id    TEXT    NOT NULL REFERENCES members(id) ON DELETE CASCADE,
-          month_label  TEXT    NOT NULL,
-          session_type TEXT    NOT NULL,
-          date         TEXT    NOT NULL,
-          doctor       TEXT    NOT NULL DEFAULT '',
-          notes        TEXT    NOT NULL DEFAULT '',
-          created_at   TEXT    NOT NULL DEFAULT (datetime('now'))
-        )
-      ''');
-    }
+    // Safe additive migrations. These do not delete user cache data.
+    await _addColumnIfMissing(db, 'members', 'phone', 'TEXT');
+    await _addColumnIfMissing(db, 'members', 'user_id', 'TEXT');
 
-    // ── Migration v3 → v4: إضافة عمود phone لجدول members ──────────────────
-    if (oldVersion < 4) {
-      try {
-        await db.execute('ALTER TABLE members ADD COLUMN phone TEXT');
-      } catch (_) {
-        // العمود موجود بالفعل على بعض الأجهزة — آمن للتجاهل
-      }
-    }
+    await _addColumnIfMissing(db, 'medications', 'reminder_hour', 'INTEGER NOT NULL DEFAULT 8');
+    await _addColumnIfMissing(db, 'medications', 'reminder_minute', 'INTEGER NOT NULL DEFAULT 0');
+    await _addColumnIfMissing(db, 'medications', 'show_on_calendar', 'INTEGER NOT NULL DEFAULT 1');
 
-    // ── Migration v4 → v5: إضافة reminder_hour / reminder_minute للأدوية ──
-    if (oldVersion < 5) {
-      try {
-        await db.execute(
-          'ALTER TABLE medications ADD COLUMN reminder_hour INTEGER NOT NULL DEFAULT 8',
-        );
-      } catch (_) {}
-      try {
-        await db.execute(
-          'ALTER TABLE medications ADD COLUMN reminder_minute INTEGER NOT NULL DEFAULT 0',
-        );
-      } catch (_) {}
-    }
+    await _addColumnIfMissing(db, 'appointments', 'location', 'TEXT');
+    await _addColumnIfMissing(db, 'appointments', 'show_on_calendar', 'INTEGER NOT NULL DEFAULT 1');
 
-    // ── Migration v5 → v6: add independent calendar visibility flags ───────
-    if (oldVersion < 6) {
-      for (final statement in [
-        'ALTER TABLE appointments ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
-        'ALTER TABLE medications ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
-        'ALTER TABLE vaccinations ADD COLUMN show_on_family_calendar INTEGER NOT NULL DEFAULT 0',
-      ]) {
-        try {
-          await db.execute(statement);
-        } catch (_) {
-          // Column may already exist on devices that were migrated manually.
-        }
-      }
-    }
+    await _addColumnIfMissing(db, 'vaccinations', 'date_given', 'TEXT');
+    await _addColumnIfMissing(db, 'vaccinations', 'next_due', 'TEXT');
+    await _addColumnIfMissing(db, 'vaccinations', 'notes', 'TEXT');
+    await _addColumnIfMissing(db, 'vaccinations', 'show_on_calendar', 'INTEGER NOT NULL DEFAULT 1');
 
-    // ── Migration v6 → v7: ensure members table matches MemberRecord sync ───
-    // Some fresh/reinstalled builds created members without phone, while
-    // Firestore/member sync inserts both phone and user_id. Add both safely so
-    // existing local databases do not crash during auth/sync.
-    if (oldVersion < 7) {
-      await _addColumnIfMissing(db, 'members', 'phone', 'TEXT');
-      await _addColumnIfMissing(db, 'members', 'user_id', 'TEXT');
-    }
+    await _ensurePrenatalTestsTable(db);
+  }
+
+  Future<void> _dropAllKnownTables(Database db) async {
+    final batch = db.batch();
+    batch.execute('DROP TABLE IF EXISTS ultrasounds');
+    batch.execute('DROP TABLE IF EXISTS prenatal_tests');
+    batch.execute('DROP TABLE IF EXISTS vaccinations');
+    batch.execute('DROP TABLE IF EXISTS documents');
+    batch.execute('DROP TABLE IF EXISTS appointments');
+    batch.execute('DROP TABLE IF EXISTS vital_signs');
+    batch.execute('DROP TABLE IF EXISTS med_confirmations');
+    batch.execute('DROP TABLE IF EXISTS medications');
+    batch.execute('DROP TABLE IF EXISTS members');
+    await batch.commit(noResult: true);
+  }
+
+  Future<void> _ensurePrenatalTestsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS prenatal_tests (
+        id            TEXT PRIMARY KEY,
+        family_id     TEXT NOT NULL,
+        member_id     TEXT NOT NULL,
+        trimester     INTEGER NOT NULL,
+        test_name     TEXT NOT NULL,
+        is_completed  INTEGER NOT NULL DEFAULT 0,
+        completed_at  TEXT,
+        created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    ''');
   }
 
   Future<void> _addColumnIfMissing(
-    Database db,
-    String table,
-    String column,
-    String definition,
-  ) async {
-    final columns = await db.rawQuery('PRAGMA table_info($table)');
-    final exists = columns.any((row) => row['name'] == column);
+      Database db, String table, String column, String definition) async {
+    final info = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = info.any((row) => row['name'] == column);
     if (!exists) {
       await db.execute('ALTER TABLE $table ADD COLUMN $column $definition');
     }

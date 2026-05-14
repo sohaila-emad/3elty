@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_application_1/data/app_repository.dart';
-import 'package:flutter_application_1/services/remote_auth_service.dart';
 import 'package:flutter_application_1/services/permission_service.dart';
+import 'package:flutter_application_1/services/remote_auth_service.dart';
 
-/// Firestore service for syncing family data from Firebase to local SQLite.
-/// Implements "pull on login" strategy.
+/// Firestore service for Firebase-first family data.
+///
+/// Firestore is the source of truth. SQLite is refreshed from Firestore and used
+/// as an offline/cache layer by the UI and local notification scheduling.
 class FirestoreService {
   FirestoreService._();
   static final FirestoreService _instance = FirestoreService._();
@@ -13,144 +15,138 @@ class FirestoreService {
   static FirestoreService get instance => _instance;
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final AppRepository _repository = AppRepository();
+  final AppRepository _repository = AppRepository.instance;
   final RemoteAuthService _authService = RemoteAuthService.instance;
   final PermissionService _permissionService = PermissionService.instance;
 
-  /// Sync all family data from Firestore to local SQLite.
-  /// Called after successful login to populate local database.
+  /// Sync all supported family data from Firestore to the local SQLite cache.
   Future<void> syncFamilyData() async {
-    try {
-      final familyId = await _authService.familyId;
-      if (familyId == null) {
-        throw Exception('No active family session');
-      }
+    final familyId = await _authService.familyId;
+    if (familyId == null) {
+      throw Exception('No active family session');
+    }
 
-      // 1. Sync members
-      final membersSnapshot = await _firestore
-          .collection('members')
-          .where('family_id', isEqualTo: familyId)
-          .get();
+    await _syncMembers(familyId);
+    await _syncMedications(familyId);
+    await _syncAppointments(familyId);
+    await _syncDocuments(familyId);
+    await _syncVaccinations(familyId);
+    await _syncVitalSigns(familyId);
+    await _syncPrenatalTests(familyId);
+  }
 
-      for (final memberDoc in membersSnapshot.docs) {
-        final memberData = _sanitizeData(memberDoc.data());
-        memberData['id'] = memberDoc.id;
-        memberData['family_id'] = familyId;
-        
-        final existingMember = await _repository.getMemberById(memberDoc.id);
-        if (existingMember != null) {
-          await _repository.updateMember(memberData);
-        } else {
-          await _repository.addMember(memberData);
-        }
-      }
+  Future<void> _syncMembers(String familyId) async {
+    final snapshot = await _firestore
+        .collection('members')
+        .where('family_id', isEqualTo: familyId)
+        .get();
 
-      // 2. Sync medications
-      final medicationsSnapshot = await _firestore
-          .collection('medications')
-          .where('family_id', isEqualTo: familyId)
-          .get();
-
-      for (final medDoc in medicationsSnapshot.docs) {
-        final medData = _sanitizeData(medDoc.data());
-        medData['id'] = medDoc.id;
-        medData['family_id'] = familyId;
-
-        final existingMed = await _repository.getMedicationById(medDoc.id);
-        if (existingMed != null) {
-          await _repository.updateMedication(medData);
-        } else {
-          await _repository.addMedication(medData);
-        }
-      }
-
-      // 3. Sync appointments
-      final appointmentsSnapshot = await _firestore
-          .collection('appointments')
-          .where('family_id', isEqualTo: familyId)
-          .get();
-
-      for (final apptDoc in appointmentsSnapshot.docs) {
-        final apptData = _sanitizeData(apptDoc.data());
-        apptData['id'] = apptDoc.id;
-        apptData['family_id'] = familyId;
-
-        final existingAppt = await _repository.getAppointmentById(apptDoc.id);
-        if (existingAppt != null) {
-          await _repository.updateAppointment(apptData);
-        } else {
-          await _repository.addAppointment(apptData);
-        }
-      }
-
-      // 4. Sync documents
-      final documentsSnapshot = await _firestore
-          .collection('documents')
-          .where('family_id', isEqualTo: familyId)
-          .get();
-
-      for (final docDoc in documentsSnapshot.docs) {
-        final docData = _sanitizeData(docDoc.data());
-        docData['id'] = docDoc.id;
-        docData['family_id'] = familyId;
-
-        final existingDoc = await _repository.getDocumentById(docDoc.id);
-        if (existingDoc != null) {
-          await _repository.updateDocument(docData);
-        } else {
-          await _repository.addDocument(docData);
-        }
-      }
-
-      // 5. Sync vaccinations
-      final vaccinationsSnapshot = await _firestore
-          .collection('vaccinations')
-          .where('family_id', isEqualTo: familyId)
-          .get();
-
-      for (final vacDoc in vaccinationsSnapshot.docs) {
-        final vacData = _sanitizeData(vacDoc.data());
-        vacData['id'] = vacDoc.id;
-        vacData['family_id'] = familyId;
-
-        final existingVac = await _repository.getVaccinationById(vacDoc.id);
-        if (existingVac != null) {
-          await _repository.updateVaccination(vacData);
-        } else {
-          await _repository.addVaccination(vacData);
-        }
-      }
-
-      // 6. Sync vital signs
-      final vitalsSnapshot = await _firestore
-          .collection('vital_signs')
-          .where('family_id', isEqualTo: familyId)
-          .get();
-
-      for (final vitalDoc in vitalsSnapshot.docs) {
-        final vitalData = _sanitizeData(vitalDoc.data());
-        vitalData['id'] = vitalDoc.id;
-        vitalData['family_id'] = familyId;
-
-        final existingVital = await _repository.getVitalById(vitalDoc.id);
-        if (existingVital != null) {
-          await _repository.updateVital(vitalData);
-        } else {
-          await _repository.addVital(vitalData);
-        }
-      }
-
-      // 7. Sync prenatal tests (pregnancy module)
-      await _syncPrenatalTests(familyId);
-    } catch (e) {
-      rethrow;
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      await _repository.addMember(data);
     }
   }
 
-  // ─── Prenatal Tests ────────────────────────────────────────────────────────
+  Future<void> _syncMedications(String familyId) async {
+    final snapshot = await _firestore
+        .collection('medications')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      data['is_active'] = _boolToInt(data['is_active'], fallback: true);
+      data['show_on_calendar'] =
+          _boolToInt(data['show_on_calendar'], fallback: true);
+      await _repository.addMedication(data);
+    }
+  }
+
+  Future<void> _syncAppointments(String familyId) async {
+    final snapshot = await _firestore
+        .collection('appointments')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      data['scheduled_at'] = data['scheduled_at'] ?? data['date'];
+      data['show_on_calendar'] =
+          _boolToInt(data['show_on_calendar'], fallback: true);
+      await _repository.addAppointment(data);
+    }
+  }
+
+  Future<void> _syncDocuments(String familyId) async {
+    final snapshot = await _firestore
+        .collection('documents')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      data['file_path'] = data['file_path'] ?? data['file_url'] ?? '';
+      data['doc_type'] = data['doc_type'] ?? data['type'] ?? 'document';
+      await _repository.addDocument(data);
+    }
+  }
+
+  Future<void> _syncVaccinations(String familyId) async {
+    final snapshot = await _firestore
+        .collection('vaccinations')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      data['received_at'] = data['received_at'] ?? data['date_given'];
+      data['is_received'] = _boolToInt(data['is_received'], fallback: data['received_at'] != null);
+      data['show_on_calendar'] =
+          _boolToInt(data['show_on_calendar'], fallback: true);
+      await _repository.addVaccination(data);
+    }
+  }
+
+  Future<void> _syncVitalSigns(String familyId) async {
+    final snapshot = await _firestore
+        .collection('vital_signs')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      await _repository.addVital(data);
+    }
+  }
+
+  Future<void> _syncPrenatalTests(String familyId) async {
+    final snapshot = await _firestore
+        .collection('prenatal_tests')
+        .where('family_id', isEqualTo: familyId)
+        .get();
+
+    for (final doc in snapshot.docs) {
+      final data = _sanitizeData(doc.data());
+      data['id'] = doc.id;
+      data['family_id'] = familyId;
+      data['is_completed'] = _boolToInt(data['is_completed'], fallback: false);
+      await _repository.insertPrenatalTest(data);
+    }
+  }
 
   /// Seed default prenatal tests for a newly added pregnant member.
-  /// Writes to Firestore AND local SQLite so data is available offline.
   Future<void> seedPrenatalTestsForMember({
     required String memberId,
     required String familyId,
@@ -172,17 +168,16 @@ class FirestoreService {
     for (final test in defaultTests) {
       final docRef = _firestore.collection('prenatal_tests').doc();
       final data = {
-        'id': docRef.id,
         'family_id': familyId,
         'member_id': memberId,
         'trimester': test['trimester'],
         'test_name': test['test_name'],
-        'is_completed': 0,
+        'is_completed': false,
         'completed_at': null,
         'created_at': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
       };
       await docRef.set(data);
-      // Also persist locally
       await _repository.insertPrenatalTest({
         'id': docRef.id,
         'family_id': familyId,
@@ -195,34 +190,8 @@ class FirestoreService {
     }
   }
 
-  /// Mark a prenatal test as completed — writes to both Firestore and SQLite.
   Future<void> completePrenatalTest(String testId) async {
-    final completedAt = DateTime.now().toIso8601String();
-    // Write to Firestore
-    await _firestore.collection('prenatal_tests').doc(testId).update({
-      'is_completed': 1,
-      'completed_at': completedAt,
-      'updated_at': FieldValue.serverTimestamp(),
-    });
-    // Write to local SQLite (keeps offline view consistent)
     await _repository.completePrenatalTest(testId);
-  }
-
-  /// Sync prenatal tests from Firestore to local SQLite.
-  /// Called as part of [syncFamilyData].
-  Future<void> _syncPrenatalTests(String familyId) async {
-    final snapshot = await _firestore
-        .collection('prenatal_tests')
-        .where('family_id', isEqualTo: familyId)
-        .get();
-
-    for (final doc in snapshot.docs) {
-      final data = _sanitizeData(doc.data());
-      data['id'] = doc.id;
-      data['family_id'] = familyId;
-      // Upsert: replace existing row or insert new one
-      await _repository.insertPrenatalTest(data);
-    }
   }
 
   /// Add a new family member and sync to Firestore.
@@ -230,40 +199,37 @@ class FirestoreService {
     required String name,
     required int age,
     required String profileType,
-    String? phone,                    // ← NEW optional param
+    String? phone,
   }) async {
-    try {
-      final canAdd = await _permissionService.canAddMember();
-      if (!canAdd) throw Exception('Only admins can add family members');
-  
-      final familyId = await _authService.familyId;
-      if (familyId == null) throw Exception('No active family session');
-  
-      final memberRef = _firestore.collection('members').doc();
-      await memberRef.set({
-        'family_id':    familyId,
-        'name':         name.trim(),
-        'age':          age,
-        'profile_type': profileType,
-        'phone':        phone,          // ← NEW: stored so OTP can verify it
-        'user_id':      null,
-        'created_at':   FieldValue.serverTimestamp(),
-        'updated_at':   FieldValue.serverTimestamp(),
-      });
-  
-      await _repository.addMember({
-        'id':           memberRef.id,
-        'family_id':    familyId,
-        'name':         name.trim(),
-        'age':          age,
-        'profile_type': profileType,
-        'phone':        phone,          // ← NEW
-      });
-  
-      return memberRef.id;
-    } catch (e) {
-      throw Exception('Failed to add family member: $e');
-    }
+    final canAdd = await _permissionService.canAddMember();
+    if (!canAdd) throw Exception('Only admins can add family members');
+
+    final familyId = await _authService.familyId;
+    if (familyId == null) throw Exception('No active family session');
+
+    final memberRef = _firestore.collection('members').doc();
+    await memberRef.set({
+      'family_id': familyId,
+      'name': name.trim(),
+      'age': age,
+      'profile_type': profileType,
+      'phone': phone,
+      'user_id': null,
+      'created_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
+    await _repository.addMember({
+      'id': memberRef.id,
+      'family_id': familyId,
+      'name': name.trim(),
+      'age': age,
+      'profile_type': profileType,
+      'phone': phone,
+      'user_id': null,
+    });
+
+    return memberRef.id;
   }
 
   /// Add a new user account for a family member.
@@ -272,57 +238,56 @@ class FirestoreService {
     required String username,
     required String password,
   }) async {
-    try {
-      final familyId = await _authService.familyId;
-      if (familyId == null) throw Exception('No active family session');
+    final familyId = await _authService.familyId;
+    if (familyId == null) throw Exception('No active family session');
 
-      final userRole = await _authService.userRole;
-      if (userRole != 'admin') throw Exception('Only admins can create member accounts');
-
-      final userRef = _firestore.collection('users').doc();
-      final passwordHash = _simpleHash(password);
-
-      await userRef.set({
-        'family_id': familyId,
-        'username': username.trim(),
-        'password_hash': passwordHash,
-        'role': 'member',
-        'is_active': true,
-        'created_at': FieldValue.serverTimestamp(),
-        'updated_at': FieldValue.serverTimestamp(),
-      });
-
-      await _firestore
-          .collection('members')
-          .doc(memberId)
-          .update({'user_id': userRef.id});
-
-      return userRef.id;
-    } catch (e) {
-      throw Exception('Failed to create member account: $e');
+    final userRole = await _authService.userRole;
+    if (userRole != 'admin') {
+      throw Exception('Only admins can create member accounts');
     }
+
+    final userRef = _firestore.collection('users').doc();
+    final passwordHash = _simpleHash(password);
+
+    await userRef.set({
+      'family_id': familyId,
+      'username': username.trim(),
+      'password_hash': passwordHash,
+      'role': 'member',
+      'phone': null,
+      'pin_hash': null,
+      'is_active': true,
+      'failed_attempts': 0,
+      'locked_until': null,
+      'created_at': FieldValue.serverTimestamp(),
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
+    await _firestore.collection('members').doc(memberId).update({
+      'user_id': userRef.id,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
+
+    final member = await _repository.getMemberById(memberId);
+    if (member != null) {
+      await _repository.updateMember(member.copyWith(userId: userRef.id).toMap());
+    }
+
+    return userRef.id;
   }
 
-  /// Get all family members from Firestore.
   Future<List<Map<String, dynamic>>> getFamilyMembers() async {
-    try {
-      final familyId = await _authService.familyId;
-      if (familyId == null) throw Exception('No active family session');
+    final familyId = await _authService.familyId;
+    if (familyId == null) throw Exception('No active family session');
 
-      final snapshot = await _firestore
-          .collection('members')
-          .where('family_id', isEqualTo: familyId)
-          .get();
+    final snapshot = await _firestore
+        .collection('members')
+        .where('family_id', isEqualTo: familyId)
+        .get();
 
-      return snapshot.docs
-          .map((doc) => {'id': doc.id, ...doc.data()})
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to fetch family members: $e');
-    }
+    return snapshot.docs.map((doc) => {'id': doc.id, ...doc.data()}).toList();
   }
 
-  /// Update a family member (admin only).
   Future<void> updateFamilyMember({
     required String memberId,
     required String name,
@@ -330,54 +295,61 @@ class FirestoreService {
     required String profileType,
     String? phone,
   }) async {
-    try {
-      final canEdit = await _permissionService.canEditMember();
-      if (!canEdit) throw Exception('Only admins can update members');
+    final canEdit = await _permissionService.canEditMember();
+    if (!canEdit) throw Exception('Only admins can update members');
 
-      await _firestore.collection('members').doc(memberId).update({
-        'name': name.trim(),
-        'age': age,
-        'profile_type': profileType,
-        if (phone != null) 'phone': phone,
-        'updated_at': FieldValue.serverTimestamp(),
-      });
+    await _firestore.collection('members').doc(memberId).update({
+      'name': name.trim(),
+      'age': age,
+      'profile_type': profileType,
+      'phone': phone,
+      'updated_at': FieldValue.serverTimestamp(),
+    });
 
-      await _repository.updateMember({
-        'id': memberId,
-        'name': name.trim(),
-        'age': age,
-        'profile_type': profileType,
-        if (phone != null) 'phone': phone,
-      });
-    } catch (e) {
-      throw Exception('Failed to update member: $e');
-    }
+    final existing = await _repository.getMemberById(memberId);
+    await _repository.updateMember({
+      'id': memberId,
+      'family_id': existing?.familyId ?? await _authService.familyId,
+      'name': name.trim(),
+      'age': age,
+      'profile_type': profileType,
+      'phone': phone,
+      'user_id': existing?.userId,
+    });
   }
 
-  /// Delete a family member (admin only).
   Future<void> deleteFamilyMember(String memberId) async {
-    try {
-      final canDelete = await _permissionService.canDeleteMember();
-      if (!canDelete) throw Exception('Only admins can delete members');
+    final canDelete = await _permissionService.canDeleteMember();
+    if (!canDelete) throw Exception('Only admins can delete members');
 
-      await _firestore.collection('members').doc(memberId).delete();
-      await _repository.deleteMember(memberId);
-    } catch (e) {
-      throw Exception('Failed to delete member: $e');
-    }
+    await _firestore.collection('members').doc(memberId).delete();
+    await _repository.deleteMember(memberId);
   }
 
-  // ─── Private Helpers ───────────────────────────────────────────────────────
-
-  /// Sanitizes Firestore data by converting Timestamps to ISO Strings for SQLite.
   Map<String, dynamic> _sanitizeData(Map<String, dynamic> data) {
-    final Map<String, dynamic> sanitized = Map.from(data);
-    sanitized.forEach((key, value) {
+    final sanitized = <String, dynamic>{};
+    data.forEach((key, value) {
       if (value is Timestamp) {
         sanitized[key] = value.toDate().toIso8601String();
+      } else if (value is DateTime) {
+        sanitized[key] = value.toIso8601String();
+      } else {
+        sanitized[key] = value;
       }
     });
     return sanitized;
+  }
+
+  int _boolToInt(dynamic value, {required bool fallback}) {
+    if (value == null) return fallback ? 1 : 0;
+    if (value is bool) return value ? 1 : 0;
+    if (value is int) return value == 0 ? 0 : 1;
+    if (value is num) return value == 0 ? 0 : 1;
+    if (value is String) {
+      final normalized = value.toLowerCase().trim();
+      return normalized == 'false' || normalized == '0' ? 0 : 1;
+    }
+    return fallback ? 1 : 0;
   }
 
   String _simpleHash(String input) {
