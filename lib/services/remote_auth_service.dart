@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'sos_service.dart';
 
 /// Remote authentication service using Firebase Firestore.
 /// Manages family signup, signin, and token management.
@@ -93,6 +94,7 @@ class RemoteAuthService {
 
       final token = _generateToken(userId, familyId, 'admin');
       await _storeTokens(token, familyId, userId, 'admin');
+      await SosService.instance.saveFcmToken(); // ← save FCM token on signup
 
       return familyId;
     } catch (e) {
@@ -147,6 +149,7 @@ class RemoteAuthService {
 
       final token = _generateToken(userId, familyId, userRole);
       await _storeTokens(token, familyId, userId, userRole);
+      await SosService.instance.saveFcmToken(); // ← save FCM token on login
 
       return familyId;
     } catch (e) {
@@ -231,6 +234,7 @@ class RemoteAuthService {
 
     final token = _generateToken(userId, linkedFamilyId, 'member');
     await _storeTokens(token, linkedFamilyId, userId, 'member');
+    await SosService.instance.saveFcmToken(); // ← save FCM token on PIN login
     return linkedFamilyId;
   }
   /// Sign in as a member using family username + member username + password.
@@ -274,6 +278,7 @@ class RemoteAuthService {
 
       final token = _generateToken(userId, familyId, userRole);
       await _storeTokens(token, familyId, userId, userRole);
+      await SosService.instance.saveFcmToken(); // ← save FCM token on member login
 
       return familyId;
     } catch (e) {

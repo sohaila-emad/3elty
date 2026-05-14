@@ -33,6 +33,7 @@ import 'services/vital_alert_service.dart';
 import 'services/medication_service.dart';
 import 'services/pdf_service.dart';
 import 'services/document_file_helper.dart';
+import 'services/sos_service.dart';
 import 'utils/auth_helpers.dart';
 import 'data/models/calendar_event.dart';
 
@@ -906,6 +907,10 @@ class _PanicButton extends StatelessWidget {
   const _PanicButton({required this.memberName});
 
   void _confirm(BuildContext context) {
+    _doConfirm(context);
+  }
+
+  Future<void> _doConfirm(BuildContext context) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -949,19 +954,58 @@ class _PanicButton extends StatelessWidget {
                   minimumSize: const Size(double.infinity, kMinTouch),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
                   HapticFeedback.heavyImpact();
+
+                  // Show "sending" indicator
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     backgroundColor: AppColors.red,
+                    duration: const Duration(seconds: 30),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    content: const Row(children: [
+                      SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                          child: Text('جارٍ إرسال تنبيه الطوارئ...',
+                              style: TextStyle(color: Colors.white))),
+                    ]),
+                  ));
+
+                  final result = await SosService.instance
+                      .triggerSOS(memberName: memberName);
+
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    backgroundColor:
+                        result.success ? AppColors.red : AppColors.grey600,
                     duration: const Duration(seconds: 5),
                     behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    content: const Row(children: [
-                      Icon(Icons.check_circle_rounded, color: Colors.white),
-                      SizedBox(width: 12),
-                      Expanded(child: Text('تم إرسال تنبيه الطوارئ لجميع أفراد العائلة',
-                          style: TextStyle(color: Colors.white))),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    content: Row(children: [
+                      Icon(
+                        result.success
+                            ? Icons.check_circle_rounded
+                            : Icons.error_rounded,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Text(
+                        result.success
+                            ? 'تم إرسال تنبيه الطوارئ لـ ${result.notifiedCount} من أفراد العائلة'
+                            : result.errorMessage ??
+                                'فشل إرسال SOS. يرجى المحاولة مجدداً.',
+                        style: const TextStyle(color: Colors.white),
+                      )),
                     ]),
                   ));
                 },

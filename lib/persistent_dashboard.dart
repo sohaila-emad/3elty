@@ -3,13 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'services/remote_auth_service.dart';
 import 'services/firestore_service.dart';
+import 'services/sos_service.dart';
 import 'main.dart';
 import 'data/app_repository.dart';
 import 'utils/error_handler.dart';
 import 'screens/first_time_setup_screen.dart';
+
 import 'modules/family_calendar_screen.dart';
 import 'data/models/calendar_event.dart';
 import 'screens/profile_intro_animation_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class FamilyDashboard extends StatefulWidget {
   const FamilyDashboard({super.key});
@@ -220,22 +223,58 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
                   HapticFeedback.heavyImpact();
+
+                  // Show "sending" snackbar
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     backgroundColor: AppColors.red,
-                    duration: const Duration(seconds: 5),
+                    duration: const Duration(seconds: 30),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                     content: const Row(children: [
-                      Icon(Icons.check_circle_rounded, color: Colors.white),
+                      SizedBox(
+                        width: 20, height: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2),
+                      ),
                       SizedBox(width: 12),
                       Expanded(
-                          child: Text(
-                              'Emergency alert sent to all family members',
+                          child: Text('Sending SOS alert...',
                               style: TextStyle(color: Colors.white))),
+                    ]),
+                  ));
+
+                  final result = await SosService.instance
+                      .triggerSOS(memberName: 'Family Member');
+
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    backgroundColor:
+                        result.success ? AppColors.red : AppColors.grey600,
+                    duration: const Duration(seconds: 5),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    content: Row(children: [
+                      Icon(
+                        result.success
+                            ? Icons.check_circle_rounded
+                            : Icons.error_rounded,
+                        color: Colors.white,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Text(
+                        result.success
+                            ? 'Emergency alert sent to family member(s)'
+                            : result.errorMessage ??
+                                'SOS failed. Please try again.',
+                        style: const TextStyle(color: Colors.white),
+                      )),
                     ]),
                   ));
                 },
@@ -360,10 +399,42 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.teal))
-          : _dashboardBody(),
+
+      body: Column(
+        children: [
+          // ── SOS Alert Banner ───────────────────────────────────────────────
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream: SosService.instance.activeAlertsStream(),
+            builder: (context, snapshot) {
+              final alerts = snapshot.data ?? [];
+              if (alerts.isEmpty) return const SizedBox.shrink();
+              return Column(
+                children: alerts.map((alert) {
+                  final name    = alert['member_name'] as String? ?? 'A family member';
+                  final lat     = alert['latitude']    as double?;
+                  final lng     = alert['longitude']   as double?;
+                  final alertId = alert['id']          as String? ?? '';
+                  final mapsUrl = (lat != null && lng != null)
+                      ? 'https://maps.google.com/?q=$lat,$lng'
+                      : null;
+                  return _SosAlertBanner(
+                    memberName: name,
+                    mapsUrl:    mapsUrl,
+                    alertId:    alertId,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          // ── Main content ───────────────────────────────────────────────────
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.teal))
+                : _dashboardBody(),
+          ),
+        ],
+      ),
     );
   }
 
@@ -833,6 +904,147 @@ class _MemberCard extends StatelessWidget {
             ),
             const Icon(Icons.chevron_right_rounded, color: AppColors.grey600),
           ]),
+        ),
+      ),
+    );
+  }
+}
+
+
+// ── SOS Alert Banner ──────────────────────────────────────────────────────────
+class _SosAlertBanner extends StatefulWidget {
+  final String  memberName;
+  final String? mapsUrl;
+  final String  alertId;
+
+  const _SosAlertBanner({
+    required this.memberName,
+    required this.alertId,
+    this.mapsUrl,
+  });
+
+  @override
+  State<_SosAlertBanner> createState() => _SosAlertBannerState();
+}
+
+class _SosAlertBannerState extends State<_SosAlertBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse;
+  late final Animation<double>    _opacity;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync:    this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _opacity = Tween<double>(begin: 1.0, end: 0.55).animate(
+      CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openMaps() async {
+    if (widget.mapsUrl == null) return;
+    final uri = Uri.parse(widget.mapsUrl!);
+    
+    // Try Google Maps app first, then fall back to browser
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      // Fallback: open in browser
+      await launchUrl(uri, mode: LaunchMode.platformDefault);
+    }
+  }
+  
+
+  Future<void> _resolve() async {
+    await SosService.instance.resolveAlert(widget.alertId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _opacity,
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color:        AppColors.red,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(
+              color:      AppColors.red.withOpacity(0.35),
+              blurRadius: 12,
+              offset:     const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              const Icon(Icons.sos_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '🚨 SOS — ${widget.memberName}',
+                  style: const TextStyle(
+                    color:      Colors.white,
+                    fontSize:   16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            const Text(
+              'Emergency alert! This person needs help.',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            Row(children: [
+              if (widget.mapsUrl != null)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side:            const BorderSide(color: Colors.white54),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                    onPressed: _openMaps,
+                    icon:  const Icon(Icons.location_on_rounded, size: 16),
+                    label: const Text('View Location',
+                        style: TextStyle(fontSize: 13)),
+                  ),
+                ),
+              if (widget.mapsUrl != null) const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: AppColors.red,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                  onPressed: _resolve,
+                  icon:  const Icon(Icons.check_rounded, size: 16),
+                  label: const Text('Resolve',
+                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ]),
+          ],
         ),
       ),
     );
