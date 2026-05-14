@@ -4,6 +4,7 @@ import '../main.dart';
 import '../data/app_repository.dart';
 import '../data/models/calendar_event.dart';
 import '../services/remote_auth_service.dart';
+import '../widgets/premium_ui.dart';
 
 class FamilyCalendarScreen extends StatefulWidget {
   final List<FamilyMember> familyMembers;
@@ -72,10 +73,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
 
   DateTime get _weekEndExclusive => _weekStart.add(const Duration(days: 7));
 
-  List<DateTime> get _weekDays => List.generate(
-        7,
-        (index) => _weekStart.add(Duration(days: index)),
-      );
+  List<DateTime> get _weekDays => List.generate(7, (index) => _weekStart.add(Duration(days: index)));
 
   DateTime _eventDateTime(CalendarEvent event) {
     final time = event.eventTime;
@@ -177,10 +175,12 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
     switch (profileType) {
       case 'child':
         return const Color(0xFF1565C0);
+      case 'elder':
       case 'elderly':
         return const Color(0xFF6A1B9A);
       case 'pregnant':
         return const Color(0xFFAD1457);
+      case 'choronic':
       case 'chronic':
         return const Color(0xFFBF360C);
       case 'adult':
@@ -194,10 +194,12 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
     switch (profileType) {
       case 'child':
         return const Color(0xFFE3F2FD);
+      case 'elder':
       case 'elderly':
         return const Color(0xFFF3E5F5);
       case 'pregnant':
         return const Color(0xFFFCE4EC);
+      case 'choronic':
       case 'chronic':
         return const Color(0xFFFBE9E7);
       case 'adult':
@@ -224,10 +226,12 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
     switch (profileType) {
       case 'child':
         return 'Child';
+      case 'elder':
       case 'elderly':
         return 'Elderly';
       case 'pregnant':
         return 'Pregnant';
+      case 'choronic':
       case 'chronic':
         return 'Chronic';
       case 'adult':
@@ -249,101 +253,175 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      appBar: AppBar(
-        title: const Text(
-          'Family Calendar / تقويم العائلة',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      body: PremiumScaffoldBackground(
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
+              : Column(
+                  children: [
+                    _buildPremiumHeader(),
+                    _buildDaySelector(),
+                    Expanded(child: _buildSelectedDayEvents()),
+                  ],
+                ),
         ),
-        backgroundColor: AppColors.teal,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          TextButton(
-            onPressed: _goToCurrentWeek,
-            child: const Text(
-              'Today',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _loadCalendarEvents,
-          ),
-        ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
-          : Column(
-              children: [
-                _buildWeekHeader(),
-                _buildDaySelector(),
-                Expanded(child: _buildSelectedDayEvents()),
-              ],
-            ),
     );
   }
 
-  Widget _buildWeekHeader() {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: AppColors.teal,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
-      child: Row(
-        children: [
-          _navButton(Icons.chevron_left_rounded, _goToPreviousWeek),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Text(
-                  'Weekly Family Calendar',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _weekRangeLabel(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w800,
+  Widget _buildPremiumHeader() {
+    final weekEventsCount = _eventsForVisibleWeek.length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
+      child: GlassCard(
+        radius: 28,
+        padding: EdgeInsets.zero,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.teal.withOpacity(0.94),
+                const Color(0xFF18B7A1).withOpacity(0.86),
+                const Color(0xFFBCEFE6).withOpacity(0.55),
+              ],
+            ),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _headerIconButton(Icons.arrow_back_rounded, () => Navigator.pop(context)),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Family Calendar / تقويم العائلة',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: TextButton(
+                      onPressed: _goToCurrentWeek,
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      backgroundColor: Colors.white.withOpacity(0.16),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+                    ),
+                      child: const Text(
+                        'Today',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  _headerIconButton(Icons.refresh_rounded, _loadCalendarEvents),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _weekNavButton(Icons.chevron_left_rounded, _goToPreviousWeek),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Text(
+                          'Weekly schedule',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _weekRangeLabel(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  _weekNavButton(Icons.chevron_right_rounded, _goToNextWeek),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  PremiumPill(
+                    icon: Icons.event_available_rounded,
+                    label: '$weekEventsCount ${weekEventsCount == 1 ? 'event' : 'events'} this week',
+                    color: AppColors.teal,
+                    backgroundColor: Colors.white.withOpacity(0.92),
+                  ),
+                  PremiumPill(
+                    icon: Icons.visibility_rounded,
+                    label: 'Calendar-visible items only',
+                    color: Colors.white,
+                    backgroundColor: Colors.white.withOpacity(0.18),
+                  ),
+                ],
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          _navButton(Icons.chevron_right_rounded, _goToNextWeek),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _navButton(IconData icon, VoidCallback onTap) {
+  Widget _headerIconButton(IconData icon, VoidCallback onTap) {
     return Material(
-      color: Colors.white.withValues(alpha: 0.16),
+      color: Colors.white.withOpacity(0.16),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(icon, color: Colors.white),
+          width: 38,
+          height: 38,
+          child: Icon(icon, color: Colors.white, size: 21),
+        ),
+      ),
+    );
+  }
+
+  Widget _weekNavButton(IconData icon, VoidCallback onTap) {
+    return Material(
+      color: Colors.white.withOpacity(0.18),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: SizedBox(
+          width: 38,
+          height: 38,
+          child: Icon(icon, color: Colors.white, size: 25),
         ),
       ),
     );
@@ -351,30 +429,15 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
 
   Widget _buildDaySelector() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.grey200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: SingleChildScrollView(
+      height: 96,
+      margin: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            const SizedBox(width: 10),
-            ..._weekDays.map((day) => _dayChip(day)),
-            const SizedBox(width: 10),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        itemCount: _weekDays.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) => _dayChip(_weekDays[index]),
       ),
     );
   }
@@ -384,91 +447,93 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
     final today = _isToday(day);
     final eventsCount = _eventsForDay(day).length;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Material(
-        color: selected
-            ? AppColors.teal
-            : today
-                ? AppColors.tealLight
-                : AppColors.grey50,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => setState(() => _selectedDay = _dateOnly(day)),
-          child: Container(
-            width: 68,
-            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: selected
-                    ? AppColors.teal
-                    : today
-                        ? AppColors.teal
-                        : AppColors.grey200,
+    return GestureDetector(
+      onTap: () => setState(() => _selectedDay = _dateOnly(day)),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 68,
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          gradient: selected
+              ? const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [AppColors.teal, Color(0xFF1DBAA5)],
+                )
+              : null,
+          color: selected ? null : Colors.white.withOpacity(today ? 0.82 : 0.66),
+          border: Border.all(
+            color: selected
+                ? Colors.white.withOpacity(0.38)
+                : today
+                    ? AppColors.teal.withOpacity(0.28)
+                    : Colors.white.withOpacity(0.54),
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: AppColors.teal.withOpacity(0.20),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              DateFormat('EEE').format(day),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                color: selected ? Colors.white : today ? AppColors.teal : AppColors.grey600,
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  DateFormat('EEE').format(day),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: selected
-                        ? Colors.white
-                        : today
-                            ? AppColors.teal
-                            : AppColors.grey600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${day.day}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                    color: selected ? Colors.white : AppColors.grey900,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Container(
-                  constraints: const BoxConstraints(minWidth: 20),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? Colors.white.withValues(alpha: 0.22)
-                        : eventsCount > 0
-                            ? AppColors.tealLight
-                            : AppColors.grey100,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '$eventsCount',
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 10,
-                      height: 1.1,
-                      fontWeight: FontWeight.w900,
-                      color: selected
-                          ? Colors.white
-                          : eventsCount > 0
-                              ? AppColors.teal
-                              : AppColors.grey500,
-                    ),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 4),
+            Text(
+              '${day.day}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 19,
+                fontWeight: FontWeight.w900,
+                color: selected ? Colors.white : const Color(0xFF12312D),
+              ),
             ),
-          ),
+            const SizedBox(height: 5),
+            Container(
+              constraints: const BoxConstraints(minWidth: 22),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withOpacity(0.22)
+                    : eventsCount > 0
+                        ? AppColors.teal.withOpacity(0.12)
+                        : AppColors.grey100.withOpacity(0.72),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                '$eventsCount',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 10,
+                  height: 1.1,
+                  fontWeight: FontWeight.w900,
+                  color: selected
+                      ? Colors.white
+                      : eventsCount > 0
+                          ? AppColors.teal
+                          : AppColors.grey500,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -479,10 +544,11 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
 
     return RefreshIndicator(
       color: AppColors.teal,
+      backgroundColor: Colors.white,
       onRefresh: _loadCalendarEvents,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
         children: [
           _selectedDayHeader(selectedEvents.length),
           const SizedBox(height: 12),
@@ -496,44 +562,44 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
   }
 
   Widget _selectedDayHeader(int count) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                DateFormat('EEEE').format(_selectedDay),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.grey900),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                DateFormat('MMM d, yyyy').format(_selectedDay),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.grey600),
-              ),
-            ],
+    return GlassCard(
+      radius: 22,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormat('EEEE').format(_selectedDay),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF12312D)),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  DateFormat('MMM d, yyyy').format(_selectedDay),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF12312D).withOpacity(0.62),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 10),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.tealLight,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: AppColors.teal.withValues(alpha: 0.18)),
+          const SizedBox(width: 10),
+          PremiumPill(
+            icon: Icons.bolt_rounded,
+            label: '$count ${count == 1 ? 'event' : 'events'}',
+            color: AppColors.teal,
+            backgroundColor: AppColors.tealLight,
           ),
-          child: Text(
-            '$count ${count == 1 ? 'event' : 'events'}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.teal),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -545,100 +611,84 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _showEventDetails(event),
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: color.withValues(alpha: 0.22)),
-              boxShadow: [
-                BoxShadow(
-                  color: color.withValues(alpha: 0.07),
-                  blurRadius: 14,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 58,
-                  padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: softColor,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: color.withValues(alpha: 0.20)),
+      child: GlassCard(
+        onTap: () => _showEventDetails(event),
+        radius: 24,
+        padding: const EdgeInsets.all(14),
+        border: Border.all(color: color.withOpacity(0.16)),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 62,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              decoration: BoxDecoration(
+                color: softColor.withOpacity(0.92),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: color.withOpacity(0.20)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    DateFormat('h:mm').format(DateTime(2024, 1, 1, hour, minute)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: color),
                   ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+                  const SizedBox(height: 2),
+                  Text(
+                    DateFormat('a').format(DateTime(2024, 1, 1, hour, minute)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: color.withOpacity(0.74)),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Text(
-                        DateFormat('h:mm').format(DateTime(2024, 1, 1, hour, minute)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: color),
+                      Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(color: softColor, borderRadius: BorderRadius.circular(12)),
+                        child: Icon(event.eventType.icon, color: color, size: 17),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        DateFormat('a').format(DateTime(2024, 1, 1, hour, minute)),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: color.withValues(alpha: 0.78)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          event.eventType.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: 8),
+                  Text(
+                    event.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, height: 1.18, fontWeight: FontWeight.w900, color: Color(0xFF12312D)),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(color: softColor, borderRadius: BorderRadius.circular(10)),
-                            child: Icon(event.eventType.icon, color: color, size: 17),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              event.eventType.label,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        event.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 16, height: 1.18, fontWeight: FontWeight.w900, color: AppColors.grey900),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          _miniInfoChip(Icons.person_rounded, event.memberName, color, softColor),
-                          _miniInfoChip(Icons.category_rounded, _profileLabel(event.memberProfileType), color, softColor),
-                        ],
-                      ),
+                      _miniInfoChip(Icons.person_rounded, event.memberName, color, softColor),
+                      _miniInfoChip(Icons.category_rounded, _profileLabel(event.memberProfileType), color, softColor),
                     ],
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -649,7 +699,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
       constraints: const BoxConstraints(maxWidth: 180),
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: softColor.withValues(alpha: 0.85),
+        color: softColor.withOpacity(0.85),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -662,7 +712,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
               text,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: color),
             ),
           ),
         ],
@@ -671,40 +721,34 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
   }
 
   Widget _emptyDayState() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 24),
-      padding: const EdgeInsets.fromLTRB(24, 34, 24, 34),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: AppColors.grey200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+    return GlassCard(
+      radius: 26,
+      padding: const EdgeInsets.fromLTRB(22, 28, 22, 28),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: const BoxDecoration(color: AppColors.tealLight, shape: BoxShape.circle),
-            child: const Icon(Icons.event_busy_rounded, color: AppColors.teal, size: 38),
+          const GradientIconBox(
+            icon: Icons.event_busy_rounded,
+            color: AppColors.teal,
+            size: 72,
+            iconSize: 36,
+            radius: 26,
           ),
           const SizedBox(height: 16),
           const Text(
             'No events for this day',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.grey900),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF12312D)),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Scheduled items appear here only when “Show on Family Calendar” is enabled.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, height: 1.4, fontWeight: FontWeight.w600, color: AppColors.grey600),
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF12312D).withOpacity(0.62),
+            ),
           ),
         ],
       ),
@@ -718,54 +762,57 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
     showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(color: softColor, borderRadius: BorderRadius.circular(14)),
-                      child: Icon(event.eventType.icon, color: color),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            event.title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.grey900),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            event.eventType.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(color: color, fontWeight: FontWeight.w800),
-                          ),
-                        ],
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 16),
+            child: SingleChildScrollView(
+              child: GlassCard(
+                radius: 28,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(color: softColor, borderRadius: BorderRadius.circular(16)),
+                        child: Icon(event.eventType.icon, color: color),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              event.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Color(0xFF12312D)),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              event.eventType.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: color, fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  _detailRow(Icons.person_rounded, 'Member', event.memberName),
+                  _detailRow(Icons.category_rounded, 'Profile', _profileLabel(event.memberProfileType)),
+                  _detailRow(Icons.calendar_today_rounded, 'Date', DateFormat('EEEE, MMM d, yyyy').format(event.eventDate)),
+                  _detailRow(Icons.access_time_rounded, 'Time', _timeLabel(event)),
                   ],
                 ),
-                const SizedBox(height: 18),
-                _detailRow(Icons.person_rounded, 'Member', event.memberName),
-                _detailRow(Icons.category_rounded, 'Profile', _profileLabel(event.memberProfileType)),
-                _detailRow(Icons.calendar_today_rounded, 'Date', DateFormat('EEEE, MMM d, yyyy').format(event.eventDate)),
-                _detailRow(Icons.access_time_rounded, 'Time', _timeLabel(event)),
-              ],
+              ),
             ),
           ),
         );
@@ -786,7 +833,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: AppColors.grey600, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 13, color: AppColors.grey600, fontWeight: FontWeight.w800),
             ),
           ),
           Expanded(
@@ -794,7 +841,7 @@ class _FamilyCalendarScreenState extends State<FamilyCalendarScreen> {
               value,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, color: AppColors.grey900, fontWeight: FontWeight.w800),
+              style: const TextStyle(fontSize: 14, color: Color(0xFF12312D), fontWeight: FontWeight.w900),
             ),
           ),
         ],

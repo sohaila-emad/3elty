@@ -35,6 +35,7 @@ import 'services/pdf_service.dart';
 import 'services/document_file_helper.dart';
 import 'utils/auth_helpers.dart';
 import 'data/models/calendar_event.dart';
+import 'widgets/premium_ui.dart';
 
 
 // ─── DESIGN TOKENS ───────────────────────────────────────────────────────────
@@ -588,32 +589,35 @@ class MemberProfileScreen extends StatelessWidget {
     final modules = modulesFor(t);
 
     return Scaffold(
-      backgroundColor: AppColors.grey50,
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            expandedHeight: 200,
-            pinned: true,
-            backgroundColor: Colors.white,
-            foregroundColor: AppColors.grey900,
-            elevation: 0,
-            scrolledUnderElevation: 1,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_rounded),
-              onPressed: () => Navigator.pop(context),
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                onPressed: () {},
-                tooltip: 'تعديل الملف',
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
+      body: PremiumScaffoldBackground(
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              expandedHeight: 214,
+              pinned: true,
+              backgroundColor: Colors.transparent,
+              foregroundColor: const Color(0xFF12312D),
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.pop(context),
               ),
-            ],
-            flexibleSpace: FlexibleSpaceBar(
-              collapseMode: CollapseMode.pin,
-              background: _ProfileHeroHeader(member: member),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined),
+                  onPressed: () {},
+                  tooltip: 'تعديل الملف',
+                ),
+              ],
+              flexibleSpace: FlexibleSpaceBar(
+                collapseMode: CollapseMode.pin,
+                background: _ProfileHeroHeader(member: member),
+              ),
             ),
-          ),
 
           if (t == ProfileType.elderly)
             SliverToBoxAdapter(
@@ -632,14 +636,12 @@ class MemberProfileScreen extends StatelessWidget {
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-              child: Text(
-                'وحدات صحة ${t.label}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.grey900,
-                ),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+              child: PremiumSectionTitle(
+                icon: t.icon,
+                title: 'وحدات صحة ${t.label}',
+                subtitle: 'اختر الوحدة التي تريد متابعتها',
+                color: t.color,
               ),
             ),
           ),
@@ -654,15 +656,16 @@ class MemberProfileScreen extends StatelessWidget {
                 ),
                 childCount: modules.length,
               ),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: MediaQuery.of(context).size.width < 360 ? 1 : 2,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.85
+                childAspectRatio: MediaQuery.of(context).size.width < 360 ? 2.15 : 0.74,
               ),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -749,46 +752,92 @@ class _ProfileHeroHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = member.profileType;
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(20, 80, 20, 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            width: 72,
-            height: 72,
-            decoration: BoxDecoration(
-              color: t.bgColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: t.color.withValues(alpha: 0.25), width: 2),
-            ),
-            child: Icon(t.icon, color: t.color, size: 36),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(member.name,
-                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800,
-                        color: AppColors.grey900)),
-                const SizedBox(height: 6),
-                Row(children: [
-                  _ProfileChip(label: t.label, color: t.color, bgColor: t.bgColor),
-                  const SizedBox(width: 8),
-                  // formattedAge handles months for children (e.g. 36 months → "3 سنة")
-                  _ProfileChip(
-                    label: member.formattedAge,
-                    color: AppColors.grey600,
-                    bgColor: AppColors.grey100,
-                  ),
-                ]),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 78, 16, 12),
+      child: GlassCard(
+        radius: 30,
+        padding: EdgeInsets.zero,
+        border: Border.all(color: t.color.withOpacity(0.16)),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                t.color.withOpacity(0.92),
+                t.color.withOpacity(0.68),
+                Colors.white.withOpacity(0.72),
               ],
             ),
           ),
-        ],
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 78,
+                height: 78,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.24),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.42), width: 1.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: t.color.withOpacity(0.18),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Icon(t.icon, color: Colors.white, size: 36),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      member.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _ProfileChip(label: t.label, color: t.color, bgColor: Colors.white.withOpacity(0.90)),
+                        _ProfileChip(
+                          label: member.formattedAge,
+                          color: const Color(0xFF12312D),
+                          bgColor: Colors.white.withOpacity(0.76),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Health profile overview',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.82),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -803,13 +852,18 @@ class _ProfileChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withOpacity(0.10)),
       ),
-      child: Text(label,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color)),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
+      ),
     );
   }
 }
@@ -878,22 +932,35 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-      ),
+    return GlassCard(
+      radius: 20,
+      padding: const EdgeInsets.all(12),
+      border: Border.all(color: stat.color.withOpacity(0.12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(stat.icon, size: 20, color: stat.color),
-          const SizedBox(height: 8),
-          Text(stat.value,
-              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: stat.color)),
-          const SizedBox(height: 2),
-          Text(stat.label,
-              style: const TextStyle(fontSize: 12, color: AppColors.grey600)),
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: stat.color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(stat.icon, size: 20, color: stat.color),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            stat.value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: stat.color),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            stat.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: const Color(0xFF12312D).withOpacity(0.62)),
+          ),
         ],
       ),
     );
@@ -977,38 +1044,44 @@ class _PanicButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.redLight,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: () => _confirm(context),
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          child: Row(children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: const BoxDecoration(
-                color: AppColors.red,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.sos_rounded, color: Colors.white, size: 22),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('زر الطوارئ',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
-                        color: AppColors.red)),
-                SizedBox(height: 2),
-                Text('يبث الموقع الجغرافي لجميع أفراد العائلة',
-                    style: TextStyle(fontSize: 13, color: AppColors.grey600)),
-              ]),
-            ),
-            const Icon(Icons.chevron_left_rounded, color: AppColors.red),
+    return GlassCard(
+      onTap: () => _confirm(context),
+      radius: 22,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      border: Border.all(color: AppColors.red.withOpacity(0.16)),
+      child: Row(children: [
+        const GradientIconBox(
+          icon: Icons.sos_rounded,
+          color: AppColors.red,
+          size: 48,
+          iconSize: 22,
+          radius: 18,
+        ),
+        const SizedBox(width: 14),
+        const Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('زر الطوارئ',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.red)),
+            SizedBox(height: 3),
+            Text('يبث الموقع الجغرافي لجميع أفراد العائلة',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: AppColors.grey600, fontWeight: FontWeight.w700)),
           ]),
         ),
-      ),
+        const SizedBox(width: 8),
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: AppColors.red.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(Icons.chevron_left_rounded, color: AppColors.red),
+        ),
+      ]),
     );
   }
 }
@@ -1020,69 +1093,115 @@ class _ModuleCard extends StatelessWidget {
   const _ModuleCard({required this.module, required this.onTap});
 
   @override
-  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+    return GlassCard(
+      onTap: onTap,
+      radius: 22,
+      padding: const EdgeInsets.all(12),
+      border: Border.all(color: module.color.withOpacity(0.12)),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxHeight < 175 || constraints.maxWidth < 170;
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.max,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: EdgeInsets.all(compact ? 9 : 10),
                     decoration: BoxDecoration(
-                      color: module.bgColor,
-                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [module.bgColor, Colors.white.withOpacity(0.80)],
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: module.color.withOpacity(0.14)),
                     ),
-                    child: Icon(module.icon, color: module.color, size: 22),
+                    child: Icon(module.icon, color: module.color, size: compact ? 20 : 22),
                   ),
-                  if (module.badge != null) ...[
-                    const SizedBox(width: 6),
+                  const SizedBox(width: 8),
+                  if (module.badge != null)
                     Expanded(
                       child: Align(
-                        alignment: Alignment.topLeft,
+                        alignment: AlignmentDirectional.topEnd,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          constraints: const BoxConstraints(maxWidth: 92),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                           decoration: BoxDecoration(
-                            color: (module.badgeColor ?? module.color).withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(8),
+                            color: (module.badgeColor ?? module.color).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                           child: Text(
                             module.badge!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                             style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
+                              fontSize: 9.5,
+                              height: 1.05,
+                              fontWeight: FontWeight.w900,
                               color: module.badgeColor ?? module.color,
                             ),
                           ),
                         ),
                       ),
-                    ),
-                  ],
+                    )
+                  else
+                    const Spacer(),
                 ],
               ),
-              const Spacer(),
-              Text(module.title,
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                      color: AppColors.grey900),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 4),
-              Text(module.subtitle,
-                  style: const TextStyle(fontSize: 10,color: AppColors.grey600, height: 1.4),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis),
+              SizedBox(height: compact ? 10 : 12),
+              Flexible(
+                fit: FlexFit.tight,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      module.title,
+                      style: TextStyle(
+                        fontSize: compact ? 13 : 14,
+                        height: 1.12,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF12312D),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: compact ? 4 : 5),
+                    Text(
+                      module.subtitle,
+                      style: TextStyle(
+                        fontSize: compact ? 10 : 10.5,
+                        color: const Color(0xFF12312D).withOpacity(0.58),
+                        height: 1.22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      maxLines: compact ? 1 : 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    SizedBox(height: compact ? 7 : 9),
+                    Align(
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Container(
+                        width: compact ? 26 : 28,
+                        height: compact ? 26 : 28,
+                        decoration: BoxDecoration(
+                          color: module.color.withOpacity(0.10),
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(Icons.arrow_forward_rounded, color: module.color, size: compact ? 15 : 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
-          ),
-        ),
+          );
+        },
       ),
     );
   }

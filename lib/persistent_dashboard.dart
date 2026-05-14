@@ -9,6 +9,7 @@ import 'utils/error_handler.dart';
 import 'screens/first_time_setup_screen.dart';
 import 'modules/family_calendar_screen.dart';
 import 'data/models/calendar_event.dart';
+import 'widgets/premium_ui.dart';
 import 'screens/profile_intro_animation_screen.dart';
 
 class FamilyDashboard extends StatefulWidget {
@@ -259,11 +260,19 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.grey50,
+      extendBodyBehindAppBar: true,
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('My Family'),
+        title: const Text(
+          '3elty Family',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        foregroundColor: const Color(0xFF12312D),
+        elevation: 0,
+        scrolledUnderElevation: 0,
         actions: [
-          // ── REFRESH BUTTON ─────────────────────────────────────────────────
           _refreshing
               ? const Padding(
                   padding: EdgeInsets.all(14),
@@ -281,8 +290,6 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                   tooltip: 'Refresh from cloud',
                   onPressed: _refreshFromFirestore,
                 ),
-
-          // Admin: Manage Family button
           FutureBuilder<String?>(
             future: _authService.userRole,
             builder: (ctx, snapshot) {
@@ -292,14 +299,12 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                   tooltip: 'Manage Family Members',
                   onPressed: () => Navigator.of(context)
                       .pushNamed('/admin_member_management')
-                      .then((_) => _loadMembers()), // reload after returning
+                      .then((_) => _loadMembers()),
                 );
               }
               return const SizedBox.shrink();
             },
           ),
-
-          // Sign out
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Sign out',
@@ -307,52 +312,47 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
               final confirmed = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
                   title: const Text('Sign out?'),
-                  content: const Text(
-                      'You will need to sign in again to access your family data.'),
+                  content: const Text('You will need to sign in again to access your family data.'),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
                       child: const Text('Cancel'),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.red),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.red),
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Sign out',
-                          style: TextStyle(color: Colors.white)),
+                      child: const Text('Sign out', style: TextStyle(color: Colors.white)),
                     ),
                   ],
                 ),
               );
               if (confirmed == true) {
-                await RemoteAuthService.instance.signOut(); // ← clears secure storage tokens
+                await RemoteAuthService.instance.signOut();
                 if (!mounted) return;
                 Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
               }
             },
           ),
-
-          // SOS button
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: Material(
-              color: AppColors.redLight,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.red.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(14),
               child: InkWell(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 onTap: _showSOSConfirmation,
                 child: const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   child: Row(children: [
-                    Icon(Icons.sos_rounded, color: AppColors.red, size: 20),
-                    SizedBox(width: 6),
+                    Icon(Icons.sos_rounded, color: AppColors.red, size: 19),
+                    SizedBox(width: 5),
                     Text('SOS',
                         style: TextStyle(
                             color: AppColors.red,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14)),
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13)),
                   ]),
                 ),
               ),
@@ -360,19 +360,23 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
           ),
         ],
       ),
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.teal))
-          : _dashboardBody(),
+      body: PremiumScaffoldBackground(
+        child: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: AppColors.teal))
+              : _dashboardBody(),
+        ),
+      ),
     );
   }
-
 
   Widget _dashboardBody() => RefreshIndicator(
         onRefresh: _refreshFromFirestore,
         color: AppColors.teal,
+        backgroundColor: Colors.white,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 110),
           children: [
             _FamilyCalendarPreviewCard(
               loading: _calendarLoading,
@@ -388,23 +392,19 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                 if (familyId != null) _loadCalendarPreview(familyId);
               }),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+            const PremiumSectionTitle(
+              icon: Icons.family_restroom_rounded,
+              title: 'Family Members / أفراد العائلة',
+              subtitle: 'Open a profile to manage care modules',
+              color: AppColors.teal,
+            ),
+            const SizedBox(height: 12),
             if (_members.isEmpty)
               _emptyStateContent()
-            else ...[
-              const Padding(
-                padding: EdgeInsets.only(left: 4, right: 4, bottom: 10),
-                child: Text(
-                  'Family Members / أفراد العائلة',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.grey900,
-                  ),
-                ),
-              ),
+            else
               ..._members.map((member) => Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.only(bottom: 12),
                     child: _MemberCard(
                       member: member,
                       onTap: () async {
@@ -433,7 +433,6 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
                       onLongPress: () => _confirmDeleteMember(member),
                     ),
                   )),
-            ],
           ],
         ),
       );
@@ -451,28 +450,29 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
   }
 
 
-  Widget _emptyStateContent() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+  Widget _emptyStateContent() => GlassCard(
+        padding: const EdgeInsets.fromLTRB(22, 30, 22, 30),
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: const BoxDecoration(
-                color: AppColors.tealLight, shape: BoxShape.circle),
-            child: const Icon(Icons.group_add_rounded,
-                size: 48, color: AppColors.teal),
+          const GradientIconBox(
+            icon: Icons.group_add_rounded,
+            color: AppColors.teal,
+            size: 72,
+            iconSize: 36,
+            radius: 24,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           const Text('No family members yet',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF12312D))),
           const SizedBox(height: 8),
-          const Text(
-              'Ask your admin to add members,\nthen tap refresh to sync.',
+          Text(
+              'Ask your admin to add members, then tap refresh to sync.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 15,
-                  color: AppColors.grey600,
-                  height: 1.5)),
-          const SizedBox(height: 24),
+                  fontSize: 14,
+                  color: const Color(0xFF12312D).withOpacity(0.62),
+                  height: 1.5,
+                  fontWeight: FontWeight.w600)),
+          const SizedBox(height: 22),
           OutlinedButton.icon(
             onPressed: _refreshing ? null : _refreshFromFirestore,
             icon: const Icon(Icons.refresh_rounded),
@@ -480,6 +480,8 @@ class _FamilyDashboardState extends State<FamilyDashboard> {
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: AppColors.teal),
               foregroundColor: AppColors.teal,
+              backgroundColor: Colors.white.withOpacity(0.64),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
           ),
         ]),
@@ -582,131 +584,117 @@ class _FamilyCalendarPreviewCard extends StatelessWidget {
 
   String _eventCountLabel() {
     final count = events.length;
-    if (count == 0) return 'No events this week / لا توجد مواعيد هذا الأسبوع';
-    if (count == 1) return '1 event this week / موعد واحد هذا الأسبوع';
-    return '$count events this week / $count مواعيد هذا الأسبوع';
+    if (count == 0) return 'No events this week';
+    if (count == 1) return '1 event this week';
+    return '$count events this week';
   }
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(24),
-        onTap: onTap,
-        child: Ink(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFFE0F7F4),
-                Colors.white,
-              ],
-            ),
-            border: Border.all(color: Color(0xFFD6EFEC)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
+    return GlassCard(
+      onTap: onTap,
+      radius: 28,
+      padding: EdgeInsets.zero,
+      tint: Colors.white,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              AppColors.teal.withOpacity(0.92),
+              const Color(0xFF2BBEA9).withOpacity(0.82),
+              const Color(0xFFF8FFFC).withOpacity(0.72),
             ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 58,
-                  height: 58,
+                  width: 54,
+                  height: 54,
                   decoration: BoxDecoration(
-                    color: AppColors.teal,
+                    color: Colors.white.withOpacity(0.22),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withOpacity(0.42)),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.teal.withValues(alpha: 0.22),
-                        blurRadius: 14,
-                        offset: const Offset(0, 6),
+                        color: AppColors.teal.withOpacity(0.22),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.calendar_month_rounded,
-                    color: Colors.white,
-                    size: 30,
-                  ),
+                  child: const Icon(Icons.calendar_month_rounded, color: Colors.white, size: 29),
                 ),
                 const SizedBox(width: 14),
-                Expanded(
+                const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
+                      Text(
                         'Family Calendar / تقويم العائلة',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 17,
                           fontWeight: FontWeight.w900,
-                          color: AppColors.grey900,
-                          height: 1.2,
+                          color: Colors.white,
+                          height: 1.18,
                         ),
                       ),
-                      const SizedBox(height: 5),
-                      const Text(
+                      SizedBox(height: 5),
+                      Text(
                         'View your family schedule',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 13,
-                          color: AppColors.grey600,
-                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w700,
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          _CalendarInfoPill(
-                            icon: Icons.date_range_rounded,
-                            label: weekRange,
-                            foregroundColor: AppColors.grey600,
-                            backgroundColor: Colors.white,
-                          ),
-                          _CalendarInfoPill(
-                            icon: Icons.event_available_rounded,
-                            label: loading ? 'Loading...' : _eventCountLabel(),
-                            foregroundColor: AppColors.teal,
-                            backgroundColor: AppColors.tealLight,
-                          ),
-                        ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 10),
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 40,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Color(0xFFD6EFEC)),
+                    color: Colors.white.withOpacity(0.88),
+                    borderRadius: BorderRadius.circular(15),
                   ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: AppColors.teal,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.teal, size: 16),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                PremiumPill(
+                  icon: Icons.date_range_rounded,
+                  label: weekRange,
+                  color: Colors.white,
+                  backgroundColor: Colors.white.withOpacity(0.18),
+                ),
+                PremiumPill(
+                  icon: Icons.event_available_rounded,
+                  label: loading ? 'Loading...' : _eventCountLabel(),
+                  color: AppColors.teal,
+                  backgroundColor: Colors.white.withOpacity(0.92),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -773,68 +761,73 @@ class _MemberCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = member.profileType;
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(children: [
-            Container(
-              width: 52,
-              height: 52,
-              decoration: BoxDecoration(
-                color: t.bgColor,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(t.icon, color: t.color, size: 28),
+    return GlassCard(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      radius: 22,
+      padding: const EdgeInsets.all(13),
+      tint: Colors.white,
+      border: Border.all(color: t.color.withOpacity(0.12)),
+      child: Row(children: [
+        Container(
+          width: 54,
+          height: 54,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [t.bgColor, Colors.white.withOpacity(0.86)],
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            border: Border.all(color: t.color.withOpacity(0.18)),
+            boxShadow: [
+              BoxShadow(
+                color: t.color.withOpacity(0.12),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Icon(t.icon, color: t.color, size: 28),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                member.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF12312D),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
-                  Text(
-                    member.name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.grey900,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: t.bgColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        t.label,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: t.color,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      member.formattedAge,
-                      style: const TextStyle(fontSize: 13, color: AppColors.grey600),
-                    ),
-                  ]),
+                  PremiumPill(label: t.label, color: t.color, backgroundColor: t.bgColor),
+                  PremiumPill(icon: Icons.cake_rounded, label: member.formattedAge, color: AppColors.grey600, backgroundColor: Colors.white.withOpacity(0.70)),
                 ],
               ),
-            ),
-            const Icon(Icons.chevron_right_rounded, color: AppColors.grey600),
-          ]),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(width: 10),
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: t.color.withOpacity(0.10),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: Icon(Icons.chevron_right_rounded, color: t.color),
+        ),
+      ]),
     );
   }
 }
