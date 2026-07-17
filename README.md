@@ -1,11 +1,5 @@
 <div align="center">
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #1 — APP LOGO
-What to put here: Your app icon / logo, square, transparent background, ~200x200px.
-If you don't have a final logo yet, a simple icon (heart + family silhouette, in Egypt-flag or teal/red palette) works great as a placeholder.
-Suggested filename: docs/screenshots/logo.png
--->
 <img width="200" height="200" alt="Image" src="https://github.com/user-attachments/assets/18e84bcc-56cf-4831-ad50-f802bd72c35d" />
 
 # 3elty (عيلتي) — The Egyptian Family Health Companion
@@ -34,12 +28,11 @@ it's the first thing recruiters/judges/visitors will see.
 Suggested filename: docs/screenshots/hero-banner.png
 -->
 <p align="center">
-  <img src="docs/screenshots/hero-banner.png" alt="3elty app preview across four screens" width="900"/>
+<img width="400" height="500" alt="Image" src="https://github.com/user-attachments/assets/57e91be0-fed9-44ee-b7f4-ceb5ad75830e" />
 </p>
 
 <blockquote align="center">
-🏆 <b>Built for and awarded 1st place at a national hackathon</b> — this repository documents the full product
-vision from our winning pitch. The app is <b>under active development</b>; see the <a href="#️-roadmap">Roadmap</a>
+🏆 <b>Awarded 1st place at a Qabilah hackathon</b> — The app is <b>under active development</b>; see the <a href="#️-roadmap">Roadmap</a>
 section for what's live today vs. what's coming next.
 </blockquote>
 
@@ -55,8 +48,6 @@ section for what's live today vs. what's coming next.
 - [Features](#-features)
 - [Tech Stack](#️-tech-stack)
 - [Architecture & Project Structure](#-architecture--project-structure)
-- [Testing & Quality](#-testing--quality)
-- [Roadmap](#️-roadmap)
 - [Getting Started](#-getting-started)
 - [Meet the Team](#-meet-the-team)
 - [Contributing](#-contributing)
@@ -129,7 +120,7 @@ Suggested filename: docs/screenshots/demo.gif
   <img src="docs/screenshots/demo.gif" alt="3elty app walkthrough demo" width="300"/>
 </p>
 
-<p align="center"><i>Watch the full hackathon pitch demo: <a href="#">[Insert YouTube/Drive link here]</a></i></p>
+<p align="center"><i>Watch the full demo: <a href="#">[Insert YouTube/Drive link here]</a></i></p>
 
 ---
 
@@ -159,10 +150,6 @@ Suggested filename: docs/screenshots/profile-selection.png
 ---
 
 ## ✨ Features
-
-> **Status legend:** ✅ Implemented &nbsp;|&nbsp; 🚧 In Progress &nbsp;|&nbsp; 📅 Planned
-> *(Update the tags below to reflect your current sprint — they're placeholders based on the
-> project's proposal scope.)*
 
 ### 🔐 Family Account & Role System
 - One Family Admin account represents the entire household
@@ -355,50 +342,6 @@ Suggested filename: docs/screenshots/architecture-diagram.png
 
 ---
 
-## 🧪 Testing & Quality
-
-3elty is backed by a full test plan covering unit, integration, and system-level testing across
-all seven epics.
-
-| Test Level | Count | Tooling |
-|---|---|---|
-| Unit Tests | 38 | `flutter_test`, `mockito`, `bloc_test` |
-| Integration Tests | 14 | `integration_test`, Firebase Emulator Suite |
-| System (End-to-End) Tests | 12 | Manual + automated on emulator & physical devices |
-| **Total** | **64** | |
-
-**Testing types covered:** functional, negative/edge-case, usability (Arabic RTL, large-font
-accessibility), security (PIN hashing, medical data privacy), and regression testing.
-
-**Devices:** Android Emulator (Pixel 6, API 33), physical Samsung Galaxy A-series device, and
-iOS Simulator (iPhone 14, iOS 16) for UI parity checks.
-
-Every test case traces back to a specific user story and to our project's [Definition of Done](#),
-covering functional completion, UI/UX quality, data integrity, integration behavior, performance,
-security & privacy, and error handling.
-
----
-
-## 🗺️ Roadmap
-
-3elty was born from a hackathon-winning pitch and is now being built out as a full product.
-This repository reflects the **complete vision**; not every feature is live yet.
-
-- [x] Family account creation & role-based member management
-- [x] PIN-based simplified login for elderly users
-- [x] Child vaccination schedule (Egypt MOH calendar)
-- [x] Shared family health calendar
-- [ ] Elderly panic button with GPS broadcast
-- [ ] Chronic disease threshold alerts & monthly clinical summary PDF
-- [ ] Emergency QR medical code
-- [ ] Ramadan Mode (auto-adjusted medication timing)
-- [ ] Arabic-language Health Awareness content feed
-- [ ] Multi-language support beyond Arabic/English
-
-> Have a feature request? Open an [issue](../../issues) — we'd love your input.
-
----
-
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -439,16 +382,15 @@ flutter test integration_test
 
 ## 👥 Meet the Team
 
-**BitCare Team** — built as part of *SBEG357: Software Engineering in Healthcare*, and awarded
-1st place at our hackathon.
+**BitCare Team** is a student team from the Department of Systems and Biomedical Engineering, Cairo University — established as part of the *Software Engineering in Healthcare Course*, and awarded 1st place at Qabilah Hackathon.
 
-| Member | Role | Focus Area |
+| Member | Email | LinKedIn |
 |---|---|---|
-| Abdullah Gamil Nasr | Product Owner · Developer | Chronic Patient & Family Calendar |
-| Abdulrahman Yasser Gamal Alden | Scrum Master · Developer | Authentication, Pregnancy & Elderly Modules |
-| Sohaila Emad Sayed | Testing Lead · Developer | Child Module & Medical Records |
-| Amat Al-Rahman Sayed Mohammed | UX · Developer | Integration & System-Level Testing |
-| Mariam Mohammed Mohammed | UX Lead · QA | UI/UX & Usability |
+| Abdullah Gamil Nasr | abdullahgamil285@gmail.com  | https://www.linkedin.com/in/abdullahgamil05/ | 
+| Abdulrahman Yasser Gamal Alden |  | https://www.linkedin.com/in/ayasser21/ |
+| Sohaila Emad Sayed |  | https://www.linkedin.com/in/sohaila-emad-b1296131a/ |
+| Amat Al-Rahman Sayed Mohammed |  | https://www.linkedin.com/in/amatalrahman-sayed/ |
+| Mariam Mohammed Mohammed |  | https://www.linkedin.com/in/mariam-mohamed-602688320/ |
 
 <!--
 🖼️ SCREENSHOT / IMAGE PLACEHOLDER #14 — TEAM PHOTO
@@ -459,18 +401,6 @@ Suggested filename: docs/screenshots/team-photo.png
 <p align="center">
   <img src="docs/screenshots/team-photo.png" alt="BitCare Team at the hackathon" width="600"/>
 </p>
-
----
-
-## 🤝 Contributing
-
-This project started as an academic and hackathon submission and is now evolving into a real
-product. Contributions, issues, and feature suggestions are welcome — feel free to open a
-pull request or start a discussion.
-
-## 📄 License
-
-This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
 
 ---
 
