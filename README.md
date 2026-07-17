@@ -174,14 +174,9 @@ Suggested filename: docs/screenshots/auth-onboarding.png
 - Illness log with symptoms, diagnosis, and treatment
 - Full child health record exportable as PDF for any clinic visit
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #6 — CHILD MODULE
-What to put here: The vaccination schedule/timeline screen for a child profile, ideally showing
-a mix of "received" (green) and "upcoming" (highlighted) vaccines, plus the growth chart screen.
-Suggested filename: docs/screenshots/child-module.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/child-module.png" alt="Child vaccination schedule and growth chart" width="500"/>
+ <img width="750" height="500" alt="Image" src="https://github.com/user-attachments/assets/cb7951cf-e280-41e2-9df7-8d66a978ec9b" />
 </p>
 
 ### 🤰 Pregnancy Module — "Journey to Motherhood"
@@ -192,14 +187,9 @@ Suggested filename: docs/screenshots/child-module.png
 - Nutrition guidance using common Egyptian foods (molokhia, ful, lentils) — safe/unsafe tags
 - Ultrasound and appointment history timeline
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #7 — PREGNANCY MODULE
-What to put here: The week-by-week tracker screen and/or the color-coded (green/red) food
-safety list screen.
-Suggested filename: docs/screenshots/pregnancy-module.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/pregnancy-module.png" alt="Pregnancy tracker and food safety list" width="500"/>
+  <img width="1603" height="729" alt="Image" src="https://github.com/user-attachments/assets/2f67669d-8ae9-4b42-9b60-b0cfe1b2428f" />
 </p>
 
 ### 👴 Elderly Module — "Companion for Seniors"
@@ -218,7 +208,7 @@ worth showing clearly (large fonts / high contrast UI).
 Suggested filename: docs/screenshots/elderly-module.png
 -->
 <p align="center">
-  <img src="docs/screenshots/elderly-module.png" alt="Elderly companion home screen with panic button" width="500"/>
+  <img width="1580" height="800" alt="Image" src="https://github.com/user-attachments/assets/8c1b5fa0-7803-4c4c-a2ad-01434362d0d6" />
 </p>
 
 ### 🏥 Chronic Disease Module — "Disease Management"
