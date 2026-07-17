@@ -134,14 +134,9 @@ its own tailored module:
 | 👴 **Elderly Parent** | Age 60+, often chronically ill | Missed medication, family far away can't monitor | Medication tracker + vitals log + panic button |
 | 🏥 **Chronic Patient** | Diabetic, hypertensive, cardiac patients | Daily readings untracked, no doctor alert system | Vitals dashboard + red-flag alerts to doctor |
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #4 — PROFILE SELECTION SCREEN
-What to put here: The "Add Family Member" screen showing the role/profile-type picker
-(Child / Elderly / Pregnant / Chronic / Adult) with the five icons above.
-Suggested filename: docs/screenshots/profile-selection.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/profile-selection.png" alt="Family member profile selection screen" width="260"/>
+ <img width="900" height="380" alt="Image" src="https://github.com/user-attachments/assets/827025f5-f919-4eba-a118-2c1b921eb30c" />
 </p>
 
 ---
@@ -259,22 +254,6 @@ Suggested filename: docs/screenshots/family-calendar.png
   <img src="docs/screenshots/family-calendar.png" alt="Shared, color-coded family health calendar" width="500"/>
 </p>
 
-### 📰 Health Awareness — "Stay Informed"
-- Official Ministry of Health awareness content integrated into the app
-- Arabic-language health articles tailored to each profile type
-- Seasonal health tips (winter flu, summer heatstroke, Ramadan medication guidance)
-- **Ramadan Mode** — medication schedules automatically shift to Suhoor and Iftar times
-
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #12 — HEALTH AWARENESS / RAMADAN MODE
-What to put here: The Arabic-language health articles feed, and/or the Ramadan Mode toggle
-screen showing adjusted medication times.
-Suggested filename: docs/screenshots/health-awareness.png
--->
-<p align="center">
-  <img src="docs/screenshots/health-awareness.png" alt="Health awareness feed and Ramadan mode" width="500"/>
-</p>
-
 ---
 
 ## 🛠️ Tech Stack
@@ -342,17 +321,6 @@ flutter pub get
 # 4. Run the app
 flutter run
 ```
-
-### Running Tests
-
-```bash
-# Unit & widget tests
-flutter test
-
-# Integration tests (requires Firebase Emulator Suite running)
-flutter test integration_test
-```
-
 ---
 
 ## 👥 Meet the Team
