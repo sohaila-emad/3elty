@@ -1,86 +1,481 @@
-# 3elty — Family Health Management 🏥
+<div align="center">
 
-> One app to manage the health of your entire family, tailored for each member's needs.
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #1 — APP LOGO
+What to put here: Your app icon / logo, square, transparent background, ~200x200px.
+If you don't have a final logo yet, a simple icon (heart + family silhouette, in Egypt-flag or teal/red palette) works great as a placeholder.
+Suggested filename: docs/screenshots/logo.png
+-->
+<img width="200" height="200" alt="Image" src="https://github.com/user-attachments/assets/18e84bcc-56cf-4831-ad50-f802bd72c35d" />
+
+# 3elty (عيلتي) — The Egyptian Family Health Companion
+
+### *One app. One family. Every generation's health, connected.*
+
+<!-- Badges: no changes needed, these render automatically from shields.io -->
+![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter&logoColor=white)
+![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth%20%7C%20Firestore%20%7C%20FCM-FFCA28?logo=firebase&logoColor=black)
+![Platforms](https://img.shields.io/badge/platforms-Android%20%7C%20iOS-blueviolet)
+![Status](https://img.shields.io/badge/status-in%20active%20development-orange)
+![Hackathon](https://img.shields.io/badge/🏆-Hackathon%20Winner-gold)
+![License](https://img.shields.io/badge/license-MIT-green)
+
+</div>
+
+<br/>
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #2 — HERO BANNER
+What to put here: A wide banner (1200x500px) showing 3-4 phone mockups side-by-side:
+e.g. the Family Dashboard, the Child Vaccination Schedule, the Elderly "Companion" screen,
+and the Chronic Disease vitals chart. This is the single most important image in the README —
+it's the first thing recruiters/judges/visitors will see.
+Suggested filename: docs/screenshots/hero-banner.png
+-->
+<p align="center">
+  <img src="docs/screenshots/hero-banner.png" alt="3elty app preview across four screens" width="900"/>
+</p>
+
+<blockquote align="center">
+🏆 <b>Built for and awarded 1st place at a national hackathon</b> — this repository documents the full product
+vision from our winning pitch. The app is <b>under active development</b>; see the <a href="#️-roadmap">Roadmap</a>
+section for what's live today vs. what's coming next.
+</blockquote>
 
 ---
 
-## 📱 About
+## 📚 Table of Contents
 
-**3elty** (عيلتي) is a Flutter-based mobile app that helps Egyptian families manage the health of every family member from a single account. Each member gets a personalized health dashboard based on their profile type — Child, Elderly, Pregnant, Chronic, or Adult.
+- [Overview](#-overview)
+- [The Problem](#-the-problem)
+- [Our Solution](#-our-solution)
+- [Demo](#-demo)
+- [Who It's For](#-who-its-for)
+- [Features](#-features)
+- [Tech Stack](#️-tech-stack)
+- [Architecture & Project Structure](#-architecture--project-structure)
+- [Testing & Quality](#-testing--quality)
+- [Roadmap](#️-roadmap)
+- [Getting Started](#-getting-started)
+- [Meet the Team](#-meet-the-team)
+- [Contributing](#-contributing)
+- [License](#-license)
+
+---
+
+## 🌟 Overview
+
+**3elty** *(Arabic: عيلتي — "my family")* is a digital health platform built on a simple idea:
+**Egyptian families don't manage health individually — they manage it together.**
+
+A single app lets a family admin coordinate vaccinations for their newborn, prenatal checkups for
+an expecting mother, daily medication for an elderly parent living alone, and blood-sugar trends
+for a diabetic relative — all from one shared, Arabic-first dashboard.
+
+> *"3elty is a digital health platform that treats the family as one unit — managing children's
+> vaccinations, pregnancy follow-up, elderly medication, and chronic disease tracking in a single
+> Arabic-first application."*
+
+---
+
+## 🚩 The Problem
+
+Egyptian families face three critical, documented healthcare gaps — and no unified digital tool
+to manage them.
+
+### 1. Vaccination Records Are Paper-Only
+Childhood vaccinations in Egypt are tracked exclusively on a paper booklet issued at birth.
+- Booklets are frequently **lost, damaged, or forgotten** — especially when families travel
+- Parents have **no way to know which vaccines are upcoming or overdue** without a hospital visit
+- There is **no national digital vaccination registry** accessible to parents
+- When a family relocates, their child's paper record is effectively lost to the healthcare system
+
+### 2. Families Are Geographically Separated
+Urban migration and a growing expatriate community create a serious care gap.
+- Millions of Egyptians work abroad while elderly parents remain home with **no digital monitoring**
+- Students in other governorates can't easily coordinate care for aging relatives
+- Distant caregivers have **no visibility** into medication adherence, vitals, or appointments
+- In emergencies, distant family members have **no access** to the patient's medical information
+
+### 3. Fragmented Chronic Disease Management
+Non-communicable diseases are Egypt's leading health burden, yet patients manage them alone.
+- Egypt ranks **9th globally in diabetes prevalence** — 8.85M patients, projected to reach 20M by 2045
+- **Hypertension affects 40%** of Egyptian adults
+- No digital tool exists to log readings, track trends, or alert a doctor to dangerous values
+- Medical records are scattered across paper prescriptions and photocopied lab results
+
+---
+
+## 💡 Our Solution
+
+An Egyptian family today manages its health with paper booklets, scattered prescriptions,
+and WhatsApp messages to distant relatives. **3elty replaces all of it with one connected,
+role-based family health platform.**
+
+---
+
+## 🎥 Demo
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #3 — DEMO GIF OR VIDEO THUMBNAIL
+What to put here: A short (15-30s) screen recording turned into a GIF showing the core flow:
+open app → family dashboard → tap child profile → mark vaccine as received → see it appear
+on the shared calendar. If you have your hackathon demo video on YouTube/Drive, embed a
+thumbnail image here that links to it instead.
+Suggested filename: docs/screenshots/demo.gif
+-->
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="3elty app walkthrough demo" width="300"/>
+</p>
+
+<p align="center"><i>Watch the full hackathon pitch demo: <a href="#">[Insert YouTube/Drive link here]</a></i></p>
+
+---
+
+## 👨‍👩‍👧‍👦 Who It's For
+
+3elty serves the Egyptian family as a single unit through five member profiles, each unlocking
+its own tailored module:
+
+| Profile | Who | Core Problem | 3elty's Answer |
+|---|---|---|---|
+| 👨 **Family Admin** | Parent managing the household | No tool to coordinate the whole family's health | Family account + shared calendar + dashboard |
+| 👶 **Child (0–12)** | Infants & young children | Vaccinations tracked on paper that gets lost | Digital MOH vaccine schedule + automated reminders |
+| 🤰 **Pregnant Woman** | Mothers during pregnancy | Prenatal care scattered across clinics & papers | Week-by-week tracking + test reminders |
+| 👴 **Elderly Parent** | Age 60+, often chronically ill | Missed medication, family far away can't monitor | Medication tracker + vitals log + panic button |
+| 🏥 **Chronic Patient** | Diabetic, hypertensive, cardiac patients | Daily readings untracked, no doctor alert system | Vitals dashboard + red-flag alerts to doctor |
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #4 — PROFILE SELECTION SCREEN
+What to put here: The "Add Family Member" screen showing the role/profile-type picker
+(Child / Elderly / Pregnant / Chronic / Adult) with the five icons above.
+Suggested filename: docs/screenshots/profile-selection.png
+-->
+<p align="center">
+  <img src="docs/screenshots/profile-selection.png" alt="Family member profile selection screen" width="260"/>
+</p>
 
 ---
 
 ## ✨ Features
 
-### 👨‍👩‍👧‍👦 Family Management
-- Create a family account with a username, display name, and admin password
-- Add multiple family members with name, age, and profile type
-- Each member gets a tailored health dashboard
-- Long press to delete a member
+> **Status legend:** ✅ Implemented &nbsp;|&nbsp; 🚧 In Progress &nbsp;|&nbsp; 📅 Planned
+> *(Update the tags below to reflect your current sprint — they're placeholders based on the
+> project's proposal scope.)*
 
-### 👶 Child Profile
-- **Vaccination Schedule** — Egypt MOH calendar with digital booklet, tracks completed vaccines (e.g. 8/12)
-- **Growth Tracking** — Log height & weight, compare against WHO percentiles
-- **Appointments** — Pediatric visits & reminders
-- **Medical Records** — Lab results, prescriptions & profile
+### 🔐 Family Account & Role System
+- One Family Admin account represents the entire household
+- Admin adds members and assigns a profile type; permissions cascade automatically
+- **Simplified PIN-based login** for elderly members — no complex passwords
+- Remote access — family members abroad can view linked profiles from anywhere
 
-### 🤰 Pregnant Profile
-- **Prenatal Tests** — Trimester checklist with reminders (e.g. Week 28 due)
-- **Prenatal Medications** — Folic acid, iron, calcium tracking
-- **Food Safety Guide** — Safe & unsafe local Egyptian dishes
-- **Appointments** — OB/GYN visits & ultrasounds
-- **Medical Records** — Pregnancy docs & test results
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #5 — AUTH / ONBOARDING
+What to put here: Two screens side by side — (1) the family account registration form
+(name, phone, password) and (2) the PIN-login screen used by elderly/less tech-savvy members.
+Suggested filename: docs/screenshots/auth-onboarding.png
+-->
+<p align="center">
+  <img src="docs/screenshots/auth-onboarding.png" alt="Registration and PIN login screens" width="500"/>
+</p>
 
-### 🧓 Elderly Profile
-- **Emergency Panic Button** — Broadcasts GPS location to all family members
-- **Medication Confirmation** — One-tap daily dose tracking with missed-dose alerts
-- **Vital Signs** — Blood pressure, glucose & more
-- **Appointments** — Doctor visits & follow-ups
-- **Medical Records** — Profile, conditions & documents
+### 👶 Child Module — "Growing Up"
+- Egypt's official **Ministry of Health vaccination schedule** pre-loaded
+- Automated reminder 3 days before each upcoming vaccine
+- Mark vaccines as received — records clinic name, date, and batch number
+- Growth tracking: weight & height plotted against **WHO percentile charts**
+- Interactive milestone checklist (first smile, first word, first steps)
+- Illness log with symptoms, diagnosis, and treatment
+- Full child health record exportable as PDF for any clinic visit
 
-### 🫀 Chronic Profile
-- **Vital Signs Logger** — Blood sugar, blood pressure & trends
-- **Medication Adherence** — Daily dose tracker & missed-dose alerts (shows % adherence)
-- **Monthly Clinical Summary** — Auto-generated PDF for doctor visits
-- **Appointments** — Specialist follow-ups & lab tests
-- **Medical Records** — Conditions, allergies & lab results
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #6 — CHILD MODULE
+What to put here: The vaccination schedule/timeline screen for a child profile, ideally showing
+a mix of "received" (green) and "upcoming" (highlighted) vaccines, plus the growth chart screen.
+Suggested filename: docs/screenshots/child-module.png
+-->
+<p align="center">
+  <img src="docs/screenshots/child-module.png" alt="Child vaccination schedule and growth chart" width="500"/>
+</p>
+
+### 🤰 Pregnancy Module — "Journey to Motherhood"
+- Week-by-week pregnancy tracker with fetal development & maternal body changes
+- Trimester-based prenatal test checklist (blood tests, ultrasounds, glucose screening) with reminders
+- Medication log for folic acid, iron, and calcium with adherence tracking
+- **Red Flag Alert** system for symptoms requiring immediate emergency attention
+- Nutrition guidance using common Egyptian foods (molokhia, ful, lentils) — safe/unsafe tags
+- Ultrasound and appointment history timeline
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #7 — PREGNANCY MODULE
+What to put here: The week-by-week tracker screen and/or the color-coded (green/red) food
+safety list screen.
+Suggested filename: docs/screenshots/pregnancy-module.png
+-->
+<p align="center">
+  <img src="docs/screenshots/pregnancy-module.png" alt="Pregnancy tracker and food safety list" width="500"/>
+</p>
+
+### 👴 Elderly Module — "Companion for Seniors"
+- Daily medication schedule with one-tap dose confirmation
+- Vital signs log: blood pressure, blood sugar, heart rate, weight
+- **Automatic danger alert** — a reading past a safe threshold instantly notifies the family
+- **Panic Button** — one tap sends GPS location + medical summary to all family members
+- Remote family view — children abroad see medication adherence and latest readings
+- **Accessibility-first UI** — large fonts, high contrast, simple navigation
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #8 — ELDERLY MODULE
+What to put here: The elderly home screen with the large one-tap "Taken" medication button
+and the prominent red Panic Button — this is one of the most visually distinctive screens,
+worth showing clearly (large fonts / high contrast UI).
+Suggested filename: docs/screenshots/elderly-module.png
+-->
+<p align="center">
+  <img src="docs/screenshots/elderly-module.png" alt="Elderly companion home screen with panic button" width="500"/>
+</p>
+
+### 🏥 Chronic Disease Module — "Disease Management"
+- Supports Diabetes, Hypertension, Cardiovascular Disease, and Kidney Disease profiles
+- Daily readings log with clinical threshold alerts
+- Medication adherence tracker with missed-dose escalation
+- Periodic exam reminders (HbA1c every 3 months, kidney function tests, eye exams)
+- **Monthly auto-generated clinical summary** ready for doctor visits
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #9 — CHRONIC DISEASE MODULE
+What to put here: The daily vitals logging screen plus the trend chart (e.g. blood sugar
+over the last 30 days) — ideally showing a threshold-breach alert banner.
+Suggested filename: docs/screenshots/chronic-module.png
+-->
+<p align="center">
+  <img src="docs/screenshots/chronic-module.png" alt="Chronic disease vitals log and trend chart" width="500"/>
+</p>
+
+### 💳 Medical Record — "Health Wallet"
+- Comprehensive digital medical file for every family member (conditions, allergies, blood type, meds)
+- Upload photos of lab results, prescriptions, X-rays, and scan reports
+- One-page medical summary **PDF** generated on demand
+- **Emergency QR Code** — scanned by paramedics to instantly reveal critical medical data
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #10 — HEALTH WALLET
+What to put here: The medical profile screen and, if possible, the Emergency QR code screen —
+these two together sell the "Health Wallet" concept well.
+Suggested filename: docs/screenshots/health-wallet.png
+-->
+<p align="center">
+  <img src="docs/screenshots/health-wallet.png" alt="Medical profile and emergency QR code screens" width="500"/>
+</p>
+
+### 📅 Family Health Calendar — "Shared Schedule"
+- Single calendar aggregating every appointment, vaccine, prenatal test, and checkup
+- Admin sees the full family picture; each member sees only their own events
+- Smart, automated reminders before every event
+- **Color-coded by member** for quick visual scanning
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #11 — FAMILY CALENDAR
+What to put here: The shared family calendar month view, color-coded by member, ideally
+with a mix of event types (vaccine, appointment, test) visible at once.
+Suggested filename: docs/screenshots/family-calendar.png
+-->
+<p align="center">
+  <img src="docs/screenshots/family-calendar.png" alt="Shared, color-coded family health calendar" width="500"/>
+</p>
+
+### 📰 Health Awareness — "Stay Informed"
+- Official Ministry of Health awareness content integrated into the app
+- Arabic-language health articles tailored to each profile type
+- Seasonal health tips (winter flu, summer heatstroke, Ramadan medication guidance)
+- **Ramadan Mode** — medication schedules automatically shift to Suhoor and Iftar times
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #12 — HEALTH AWARENESS / RAMADAN MODE
+What to put here: The Arabic-language health articles feed, and/or the Ramadan Mode toggle
+screen showing adjusted medication times.
+Suggested filename: docs/screenshots/health-awareness.png
+-->
+<p align="center">
+  <img src="docs/screenshots/health-awareness.png" alt="Health awareness feed and Ramadan mode" width="500"/>
+</p>
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework:** Flutter (Dart)
-- **Backend:** Firebase (Firestore)
-- **Storage:** flutter_secure_storage
-- **Database:** sqflite (local)
-- **Platform:** Android
+| Layer | Technology |
+|---|---|
+| **Framework** | Flutter 3.x (stable channel) |
+| **Language** | Dart 3.x |
+| **State Management** | BLoC / Cubit |
+| **Backend** | Firebase (Auth, Firestore, Cloud Storage, Cloud Messaging) |
+| **Platforms** | Android & iOS (Flutter also scaffolds Web, Windows, macOS, Linux) |
+| **Testing** | `flutter_test`, `mockito`, `bloc_test`, `integration_test` |
+| **Notifications** | Firebase Cloud Messaging (push), scheduled Cloud Functions |
+| **PDF & QR Generation** | On-device PDF export, QR encoding for emergency medical data |
+
+---
+
+## 🧱 Architecture & Project Structure
+
+```
+3elty/
+├── .vscode/                 # Editor configuration
+├── android/                 # Android platform project
+├── ios/                     # iOS platform project
+├── lib/                     # 🎯 Main Dart application source code
+├── linux/                   # Linux platform scaffold
+├── macos/                   # macOS platform scaffold
+├── test/                    # Unit & widget tests
+├── web/                     # Web platform scaffold
+├── windows/                 # Windows platform scaffold
+├── .gitignore
+├── .metadata
+├── FIREBASE_SETUP.md         # Firebase configuration guide
+├── README.md
+├── analysis_options.yaml     # Lint rules
+├── pubspec.lock
+└── pubspec.yaml              # Dependencies & project metadata
+```
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #13 — ARCHITECTURE DIAGRAM
+What to put here: A simple architecture diagram showing: Flutter App (BLoC layer) <-> Firebase
+Auth / Firestore / Cloud Storage / Cloud Messaging <-> Cloud Functions (scheduled jobs for
+missed-dose & threshold alerts). Tools like Excalidraw, Whimsical, or draw.io work well for this.
+Suggested filename: docs/screenshots/architecture-diagram.png
+-->
+<p align="center">
+  <img src="docs/screenshots/architecture-diagram.png" alt="High-level system architecture diagram" width="700"/>
+</p>
+
+> 📄 See [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md) for full backend configuration instructions.
+
+---
+
+## 🧪 Testing & Quality
+
+3elty is backed by a full test plan covering unit, integration, and system-level testing across
+all seven epics.
+
+| Test Level | Count | Tooling |
+|---|---|---|
+| Unit Tests | 38 | `flutter_test`, `mockito`, `bloc_test` |
+| Integration Tests | 14 | `integration_test`, Firebase Emulator Suite |
+| System (End-to-End) Tests | 12 | Manual + automated on emulator & physical devices |
+| **Total** | **64** | |
+
+**Testing types covered:** functional, negative/edge-case, usability (Arabic RTL, large-font
+accessibility), security (PIN hashing, medical data privacy), and regression testing.
+
+**Devices:** Android Emulator (Pixel 6, API 33), physical Samsung Galaxy A-series device, and
+iOS Simulator (iPhone 14, iOS 16) for UI parity checks.
+
+Every test case traces back to a specific user story and to our project's [Definition of Done](#),
+covering functional completion, UI/UX quality, data integrity, integration behavior, performance,
+security & privacy, and error handling.
+
+---
+
+## 🗺️ Roadmap
+
+3elty was born from a hackathon-winning pitch and is now being built out as a full product.
+This repository reflects the **complete vision**; not every feature is live yet.
+
+- [x] Family account creation & role-based member management
+- [x] PIN-based simplified login for elderly users
+- [x] Child vaccination schedule (Egypt MOH calendar)
+- [x] Shared family health calendar
+- [ ] Elderly panic button with GPS broadcast
+- [ ] Chronic disease threshold alerts & monthly clinical summary PDF
+- [ ] Emergency QR medical code
+- [ ] Ramadan Mode (auto-adjusted medication timing)
+- [ ] Arabic-language Health Awareness content feed
+- [ ] Multi-language support beyond Arabic/English
+
+> Have a feature request? Open an [issue](../../issues) — we'd love your input.
 
 ---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Flutter SDK 3.x
-- Android SDK (Platform Tools)
-- A Firebase project configured for the app
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.x (stable channel)
+- Dart 3.x (bundled with Flutter)
+- A Firebase project (Auth, Firestore, Storage, and Cloud Messaging enabled)
+- Android Studio and/or Xcode for platform builds
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/sohaila-emad/3elty.git
+# 1. Clone the repository
+git clone https://github.com/<your-org>/3elty.git
+cd 3elty
 
-# Navigate to project folder
-cd 3elty/flutter_application_1
-
-# Install dependencies
+# 2. Install dependencies
 flutter pub get
 
-# Build APK
-flutter build apk --release
+# 3. Configure Firebase
+# Follow the step-by-step guide in FIREBASE_SETUP.md to add your
+# google-services.json (Android) and GoogleService-Info.plist (iOS)
+
+# 4. Run the app
+flutter run
 ```
 
-The APK will be at:
+### Running Tests
+
+```bash
+# Unit & widget tests
+flutter test
+
+# Integration tests (requires Firebase Emulator Suite running)
+flutter test integration_test
 ```
-build/app/outputs/flutter-apk/app-release.apk
-```
+
+---
+
+## 👥 Meet the Team
+
+**BitCare Team** — built as part of *SBEG357: Software Engineering in Healthcare*, and awarded
+1st place at our hackathon.
+
+| Member | Role | Focus Area |
+|---|---|---|
+| Abdullah Gamil Nasr | Product Owner · Developer | Chronic Patient & Family Calendar |
+| Abdulrahman Yasser Gamal Alden | Scrum Master · Developer | Authentication, Pregnancy & Elderly Modules |
+| Sohaila Emad Sayed | Testing Lead · Developer | Child Module & Medical Records |
+| Amat Al-Rahman Sayed Mohammed | UX · Developer | Integration & System-Level Testing |
+| Mariam Mohammed Mohammed | UX Lead · QA | UI/UX & Usability |
+
+<!--
+🖼️ SCREENSHOT / IMAGE PLACEHOLDER #14 — TEAM PHOTO
+What to put here: A team photo from the hackathon (on stage, at your booth, or holding the
+award) — this adds a strong human, credible touch to the README.
+Suggested filename: docs/screenshots/team-photo.png
+-->
+<p align="center">
+  <img src="docs/screenshots/team-photo.png" alt="BitCare Team at the hackathon" width="600"/>
+</p>
+
+---
+
+## 🤝 Contributing
+
+This project started as an academic and hackathon submission and is now evolving into a real
+product. Contributions, issues, and feature suggestions are welcome — feel free to open a
+pull request or start a discussion.
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](./LICENSE) file for details.
+
+---
+
+<div align="center">
+
+**Made with ❤️ for Egyptian families, by the BitCare Team.**
+
+</div>
