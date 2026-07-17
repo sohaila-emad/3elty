@@ -32,8 +32,7 @@ Suggested filename: docs/screenshots/hero-banner.png
 </p>
 
 <blockquote align="center">
-🏆 <b>Awarded 1st place at a Qabilah hackathon</b> — The app is <b>under active development</b>; see the <a href="#️-roadmap">Roadmap</a>
-section for what's live today vs. what's coming next.
+🏆 <b>Awarded 1st place at a Qabilah hackathon</b> — The app is <b>under active development</b> and Features Adding.
 </blockquote>
 
 ---
