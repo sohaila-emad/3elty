@@ -46,7 +46,7 @@ Suggested filename: docs/screenshots/hero-banner.png
 - [Who It's For](#-who-its-for)
 - [Features](#-features)
 - [Tech Stack](#️-tech-stack)
-- [Architecture & Project Structure](#-architecture--project-structure)
+- [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
 - [Meet the Team](#-meet-the-team)
 
@@ -292,7 +292,7 @@ Suggested filename: docs/screenshots/health-awareness.png
 
 ---
 
-## 🧱 Architecture & Project Structure
+## 🧱 Project Structure
 
 ```
 3elty/
@@ -314,18 +314,6 @@ Suggested filename: docs/screenshots/health-awareness.png
 └── pubspec.yaml              # Dependencies & project metadata
 ```
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #13 — ARCHITECTURE DIAGRAM
-What to put here: A simple architecture diagram showing: Flutter App (BLoC layer) <-> Firebase
-Auth / Firestore / Cloud Storage / Cloud Messaging <-> Cloud Functions (scheduled jobs for
-missed-dose & threshold alerts). Tools like Excalidraw, Whimsical, or draw.io work well for this.
-Suggested filename: docs/screenshots/architecture-diagram.png
--->
-<p align="center">
-  <img src="docs/screenshots/architecture-diagram.png" alt="High-level system architecture diagram" width="700"/>
-</p>
-
-> 📄 See [`FIREBASE_SETUP.md`](./FIREBASE_SETUP.md) for full backend configuration instructions.
 
 ---
 
@@ -378,16 +366,6 @@ flutter test integration_test
 | Sohaila Emad Abdelmageed | sohaila.abdelmageed05@eng-st.cu.edu.eg | https://www.linkedin.com/in/sohaila-emad-b1296131a/ |
 | Amat Al-Rahman Sayed Mohammed | amatalrahmansayed@gmail.com | https://www.linkedin.com/in/amatalrahman-sayed/ |
 | Mariam Mohammed Mohammed | mariam.ahmed05@eng-st.cu.edu.eg | https://www.linkedin.com/in/mariam-mohamed-602688320/ |
-
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #14 — TEAM PHOTO
-What to put here: A team photo from the hackathon (on stage, at your booth, or holding the
-award) — this adds a strong human, credible touch to the README.
-Suggested filename: docs/screenshots/team-photo.png
--->
-<p align="center">
-  <img src="docs/screenshots/team-photo.png" alt="BitCare Team at the hackathon" width="600"/>
-</p>
 
 ---
 
