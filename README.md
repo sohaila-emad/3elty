@@ -32,7 +32,7 @@ Suggested filename: docs/screenshots/hero-banner.png
 </p>
 
 <blockquote align="center">
-🏆 <b>Awarded 1st place at a Qabilah hackathon</b> — The app is <b>under active development</b> and Features Adding.
+The app is <b>under active development</b> and Features Adding — 🏆 <b>Awarded 1st place at a Qabilah hackathon</b> .
 </blockquote>
 
 ---
@@ -149,14 +149,9 @@ its own tailored module:
 - **Simplified PIN-based login** for elderly members — no complex passwords
 - Remote access — family members abroad can view linked profiles from anywhere
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #5 — AUTH / ONBOARDING
-What to put here: Two screens side by side — (1) the family account registration form
-(name, phone, password) and (2) the PIN-login screen used by elderly/less tech-savvy members.
-Suggested filename: docs/screenshots/auth-onboarding.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/auth-onboarding.png" alt="Registration and PIN login screens" width="500"/>
+  <img width="750" height="500" alt="Image" src="https://github.com/user-attachments/assets/8d979051-ec63-4052-9163-d385b8956f36" />
 </p>
 
 ### 👶 Child Module — "Growing Up"
