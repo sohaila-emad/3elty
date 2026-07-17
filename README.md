@@ -28,7 +28,7 @@ it's the first thing recruiters/judges/visitors will see.
 Suggested filename: docs/screenshots/hero-banner.png
 -->
 <p align="center">
-<img width="400" height="500" alt="Image" src="https://github.com/user-attachments/assets/57e91be0-fed9-44ee-b7f4-ceb5ad75830e" />
+
 </p>
 
 <blockquote align="center">
