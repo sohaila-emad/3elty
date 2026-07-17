@@ -50,8 +50,6 @@ section for what's live today vs. what's coming next.
 - [Architecture & Project Structure](#-architecture--project-structure)
 - [Getting Started](#-getting-started)
 - [Meet the Team](#-meet-the-team)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ---
 
@@ -387,10 +385,10 @@ flutter test integration_test
 | Member | Email | LinKedIn |
 |---|---|---|
 | Abdullah Gamil Nasr | abdullahgamil285@gmail.com  | https://www.linkedin.com/in/abdullahgamil05/ | 
-| Abdulrahman Yasser Gamal Alden |  | https://www.linkedin.com/in/ayasser21/ |
-| Sohaila Emad Sayed |  | https://www.linkedin.com/in/sohaila-emad-b1296131a/ |
-| Amat Al-Rahman Sayed Mohammed |  | https://www.linkedin.com/in/amatalrahman-sayed/ |
-| Mariam Mohammed Mohammed |  | https://www.linkedin.com/in/mariam-mohamed-602688320/ |
+| Abdulrahman Yasser Gamal Alden | abdulrahmanyasser21211@gmail.com | https://www.linkedin.com/in/ayasser21/ |
+| Sohaila Emad Abdelmageed | sohaila.abdelmageed05@eng-st.cu.edu.eg | https://www.linkedin.com/in/sohaila-emad-b1296131a/ |
+| Amat Al-Rahman Sayed Mohammed | amatalrahmansayed@gmail.com | https://www.linkedin.com/in/amatalrahman-sayed/ |
+| Mariam Mohammed Mohammed | mariam.ahmed05@eng-st.cu.edu.eg | https://www.linkedin.com/in/mariam-mohamed-602688320/ |
 
 <!--
 🖼️ SCREENSHOT / IMAGE PLACEHOLDER #14 — TEAM PHOTO
