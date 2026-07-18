@@ -42,7 +42,6 @@ The app is <b>under active development</b> and Features Adding — 🏆 <b>Award
 - [Overview](#-overview)
 - [The Problem](#-the-problem)
 - [Our Solution](#-our-solution)
-- [Demo](#-demo)
 - [Who It's For](#-who-its-for)
 - [Features](#-features)
 - [Tech Stack](#️-tech-stack)
@@ -100,24 +99,6 @@ Non-communicable diseases are Egypt's leading health burden, yet patients manage
 An Egyptian family today manages its health with paper booklets, scattered prescriptions,
 and WhatsApp messages to distant relatives. **3elty replaces all of it with one connected,
 role-based family health platform.**
-
----
-
-## 🎥 Demo
-
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #3 — DEMO GIF OR VIDEO THUMBNAIL
-What to put here: A short (15-30s) screen recording turned into a GIF showing the core flow:
-open app → family dashboard → tap child profile → mark vaccine as received → see it appear
-on the shared calendar. If you have your hackathon demo video on YouTube/Drive, embed a
-thumbnail image here that links to it instead.
-Suggested filename: docs/screenshots/demo.gif
--->
-<p align="center">
-  <img src="docs/screenshots/demo.gif" alt="3elty app walkthrough demo" width="300"/>
-</p>
-
-<p align="center"><i>Watch the full demo: <a href="#">[Insert YouTube/Drive link here]</a></i></p>
 
 ---
 
@@ -207,14 +188,9 @@ Suggested filename: docs/screenshots/elderly-module.png
 - Periodic exam reminders (HbA1c every 3 months, kidney function tests, eye exams)
 - **Monthly auto-generated clinical summary** ready for doctor visits
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #9 — CHRONIC DISEASE MODULE
-What to put here: The daily vitals logging screen plus the trend chart (e.g. blood sugar
-over the last 30 days) — ideally showing a threshold-breach alert banner.
-Suggested filename: docs/screenshots/chronic-module.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/chronic-module.png" alt="Chronic disease vitals log and trend chart" width="500"/>
+ <img width="500" height="580" alt="Image" src="https://github.com/user-attachments/assets/9ec683e2-8c29-4813-bffb-43a0a4209b9f" />
 </p>
 
 ### 💳 Medical Record — "Health Wallet"
@@ -223,14 +199,9 @@ Suggested filename: docs/screenshots/chronic-module.png
 - One-page medical summary **PDF** generated on demand
 - **Emergency QR Code** — scanned by paramedics to instantly reveal critical medical data
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #10 — HEALTH WALLET
-What to put here: The medical profile screen and, if possible, the Emergency QR code screen —
-these two together sell the "Health Wallet" concept well.
-Suggested filename: docs/screenshots/health-wallet.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/health-wallet.png" alt="Medical profile and emergency QR code screens" width="500"/>
+  <img width="750" height="500" alt="Image" src="https://github.com/user-attachments/assets/ab50129c-584d-40a0-aefb-04f1ae505ea9" />
 </p>
 
 ### 📅 Family Health Calendar — "Shared Schedule"
@@ -239,14 +210,9 @@ Suggested filename: docs/screenshots/health-wallet.png
 - Smart, automated reminders before every event
 - **Color-coded by member** for quick visual scanning
 
-<!--
-🖼️ SCREENSHOT / IMAGE PLACEHOLDER #11 — FAMILY CALENDAR
-What to put here: The shared family calendar month view, color-coded by member, ideally
-with a mix of event types (vaccine, appointment, test) visible at once.
-Suggested filename: docs/screenshots/family-calendar.png
--->
+
 <p align="center">
-  <img src="docs/screenshots/family-calendar.png" alt="Shared, color-coded family health calendar" width="500"/>
+  <img width="750" height="500" alt="Image" src="https://github.com/user-attachments/assets/a5d1adff-074b-4b38-b0f8-38a29697a8a4" />
 </p>
 
 ---
