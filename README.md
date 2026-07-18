@@ -286,7 +286,7 @@ flutter run
 
 ## 👥 Meet the Team
 
-**BitCare Team** is a student team from the Department of Systems and Biomedical Engineering, Cairo University — established as part of the *Software Engineering in Healthcare Course*, and awarded 1st place at Qabilah Hackathon.
+**BitCare Team** is a student team from the Department of Systems and Biomedical Engineering, Cairo University — established as part of the *Software Engineering in Healthcare Course*.
 
 | Member | Email | LinKedIn |
 |---|---|---|
